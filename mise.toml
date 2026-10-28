@@ -1,0 +1,12 @@
+[tools]
+node = "22.23.1"
+pnpm = "10.34.7"
+
+[tasks.check]
+run = "pnpm check"
+
+[tasks.test]
+run = "pnpm test"
+
+[tasks.build]
+run = "pnpm build"

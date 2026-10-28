@@ -1,0 +1,25 @@
+/bin/
+/dist/
+/.state/
+/.idea/
+*.log
+*.test
+coverage.out
+.DS_Store
+.env
+token.env
+/node_modules/
+/.husky/_/
+*.tgz
+/.artifacts/
+/.playwright-cli/
+# Requirement records and implementation notes are the maintainer's own working
+# history. They quote real accounts, comment text and session IDs from actual
+# use, so they stay out of the public repository.
+/tasks/
+
+# Bot state and its reset backups hold the login, read messages and long-term
+# memory. They live under the home directory, not here, but a contributor who
+# points DY_STATE_DIR at the checkout must not be able to commit them.
+/.dy/
+/.dy-backup-*/

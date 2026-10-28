@@ -1,0 +1,186 @@
+import { readFile } from "node:fs/promises";
+import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
+import { App, type AppOptions, type Input } from "./app.ts";
+import { COMMANDS, type CommandSpec, GLOBAL_FLAGS, GROUPS, schema } from "./catalog.ts";
+import { CliError, errorData, errorExit, normalizeError } from "./errors.ts";
+import { runTui } from "./tui.ts";
+
+export interface Streams {
+	stdout: { write: (text: string) => unknown };
+	stderr: { write: (text: string) => unknown };
+}
+interface Globals {
+	profile?: string;
+	bot?: string;
+	stateDir?: string;
+	chrome?: string;
+	format: string;
+	timeout: number;
+	requestId?: string;
+	dryRun?: boolean;
+}
+
+function number(value: string): number {
+	if (!value.trim() || !Number.isFinite(Number(value))) throw new InvalidArgumentError("Expected a finite number");
+	return Number(value);
+}
+function boolean(value: string): boolean {
+	if (value !== "true" && value !== "false") throw new InvalidArgumentError("Expected true or false");
+	return value === "true";
+}
+function display(value: string): boolean {
+	if (value !== "headed" && value !== "headless") throw new InvalidArgumentError("Expected headed or headless");
+	return value === "headless";
+}
+
+export function createProgram(io: Streams, parentSignal?: AbortSignal, version = ""): Command {
+	const root = new Command("dy");
+	root.description("Douyin capabilities for agents, with an optional terminal UI").version(version);
+	root.exitOverride().showHelpAfterError(false);
+	root.configureOutput({
+		writeOut: (value) => io.stdout.write(value),
+		writeErr: () => undefined,
+		outputError: () => undefined,
+	});
+	for (const flag of GLOBAL_FLAGS) {
+		const option = new Option(flag.name, flag.description);
+		if ("default" in flag) option.default(flag.default);
+		if (flag.name.startsWith("--timeout")) option.argParser(number);
+		root.addOption(option);
+	}
+	const options = (command: Command): { app: AppOptions; globals: Globals } => {
+		const globals = command.optsWithGlobals<Globals>();
+		if (!["json", "pretty"].includes(globals.format))
+			throw new CliError("invalid_argument", "--format must be json or pretty");
+		if (!Number.isFinite(globals.timeout) || globals.timeout < 0.1 || globals.timeout > 3600)
+			throw new CliError("invalid_argument", "--timeout must be 0.1..3600 seconds");
+		return {
+			globals,
+			app: {
+				bot: globals.bot,
+				profile: globals.profile,
+				state_dir: globals.stateDir,
+				chrome: globals.chrome,
+				timeout: globals.timeout * 1000,
+			},
+		};
+	};
+	const output = (data: unknown, globals: Globals) =>
+		io.stdout.write(
+			`${JSON.stringify({ ok: true, ...(globals.dryRun ? { dry_run: true } : {}), data }, null, globals.format === "pretty" ? 2 : undefined)}\n`,
+		);
+	const groups = new Map<string, Command>();
+	for (const spec of COMMANDS) {
+		const [group, leaf] = spec.id.split(".");
+		let owner = root;
+		if (leaf) {
+			let command = groups.get(group);
+			if (!command) {
+				command = root.command(group).description(GROUPS[group] ?? `${group} operations`);
+				// A bare group name is a request to see what is in it. Without an
+				// action Commander treats it as a usage error and exits through
+				// `help({error:true})`, whose message is the placeholder
+				// `(outputHelp)` — so `dy memory` printed nothing and reported a
+				// validation failure naming an internal function.
+				command.action((_local: unknown, self: Command) => self.help());
+				groups.set(group, command);
+			}
+			owner = command;
+		}
+		const command = owner.command(leaf ?? group).description(spec.description);
+		if (spec.argument)
+			command.argument(
+				spec.argument.optional ? `[${spec.argument.name}]` : `<${spec.argument.name}>`,
+				spec.argument.description,
+			);
+		for (const flag of spec.flags ?? []) {
+			const option = new Option(flag.name, flag.description);
+			if (flag.default !== undefined) option.default(flag.default);
+			if (flag.required) option.makeOptionMandatory();
+			if (flag.type === "number") option.argParser(number);
+			if (flag.type === "boolean-value") option.argParser(flag.key === "headless" ? display : boolean);
+			command.addOption(option);
+		}
+		if (spec.guidance) command.addHelpText("after", `\n${spec.guidance}\n${(spec.examples ?? []).join("\n")}`);
+		command.action(async (...values: unknown[]) => {
+			const { app: appOptions, globals } = options(command);
+			const input: Input = { dry_run: globals.dryRun, request_id: globals.requestId };
+			const local = command.opts<Record<string, unknown>>();
+			for (const flag of spec.flags ?? []) {
+				const option = new Option(flag.name);
+				const value = local[option.attributeName()];
+				if (value !== undefined) Object.assign(input, { [flag.key]: value });
+			}
+			if (spec.argument) Object.assign(input, { [spec.argument.key]: values[0] });
+			const signal = AbortSignal.any([
+				...(parentSignal ? [parentSignal] : []),
+				AbortSignal.timeout(appOptions.timeout ?? 45000),
+			]);
+			try {
+				output(await new App(appOptions).execute(spec.id, input, signal), globals);
+			} catch (error) {
+				if (
+					signal.aborted &&
+					!(
+						error instanceof CliError &&
+						(["delivery_uncertain", "decision_uncertain", "migration_pending"].includes(error.code) ||
+							(spec.id === "video.observe" && ["timeout", "cancelled"].includes(error.code) && !!error.details))
+					)
+				)
+					throw signal.reason;
+				throw error;
+			}
+		});
+	}
+	root
+		.command("schema")
+		.description("Describe commands, flags, effects and output contracts as JSON")
+		.argument("[command...]", "Command path, e.g. comment post")
+		.action((path: string[], _local: unknown, command: Command) => {
+			const { globals } = options(command);
+			const result = schema(path.length ? path.join(".") : undefined);
+			if (!result.commands.length) throw new CliError("invalid_argument", "Unknown schema command");
+			output(result, globals);
+		});
+	root
+		.command("tui")
+		.description("Open the interactive terminal interface")
+		.action(async (_local: unknown, command: Command) => {
+			const { app, globals } = options(command);
+			if (globals.dryRun) throw new CliError("invalid_argument", "TUI cannot run in dry-run mode");
+			if (!process.stdin.isTTY || !process.stdout.isTTY)
+				throw new CliError("invalid_argument", "TUI requires an interactive terminal", {
+					hint: "Use ordinary commands with JSON output from an agent or pipeline.",
+				});
+			await runTui(app, parentSignal);
+		});
+	root.action(() => root.help());
+	return root;
+}
+
+export async function run(
+	args: string[],
+	io: Streams = { stdout: process.stdout, stderr: process.stderr },
+	signal?: AbortSignal,
+): Promise<number> {
+	try {
+		await createProgram(io, signal, await packageVersion()).parseAsync(args, { from: "user" });
+		return 0;
+	} catch (error) {
+		if (error instanceof CommanderError && error.exitCode === 0) return 0;
+		const problem =
+			error instanceof CommanderError ? new CliError("invalid_argument", error.message) : normalizeError(error);
+		io.stderr.write(`${JSON.stringify({ ok: false, error: errorData(problem) })}\n`);
+		return errorExit(problem);
+	}
+}
+
+// Kept separate from argument parsing so packaging tests can verify the published bin.
+export async function packageVersion(): Promise<string> {
+	const data: unknown = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+	return typeof data === "object" && data !== null && "version" in data ? String(data.version) : "";
+}
+
+export function commandByID(id: string): CommandSpec | undefined {
+	return COMMANDS.find((command) => command.id === id);
+}
