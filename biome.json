@@ -1,0 +1,10 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
+	"files": { "includes": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "*.json", "!package-lock.json", "!dist"] },
+	"formatter": { "enabled": true, "indentStyle": "tab", "lineWidth": 120 },
+	"linter": {
+		"enabled": true,
+		"rules": { "recommended": true, "suspicious": { "noExplicitAny": "error" } }
+	},
+	"assist": { "actions": { "source": { "organizeImports": "on" } } }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE bots ADD COLUMN preset TEXT;

@@ -1,0 +1,113 @@
+import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
+import type { Point, Session, Snapshot } from "../browser.ts";
+import { classifyComment } from "../comment-stance.ts";
+import { control, listResults } from "./navigation.ts";
+import type { Input } from "./validate.ts";
+
+// Public comment reads. The page reports loaded rows only, never a full history.
+
+export async function listComments(session: Session, input: Input, signal: AbortSignal): Promise<unknown> {
+	const state = await session.call<Snapshot>("video.info", input);
+	input.video_id = state.video?.id ?? state.note?.id ?? undefined;
+	await openComments(session, input, signal);
+	const result = (await listResults(session, "comment.list", input, signal)) as { items?: Record<string, unknown>[] };
+	if (!result.items) return result;
+	// Each comment is labelled by what it is doing, not just what it says. The
+	// verdict comes with the evidence that produced it, so a reader can disagree
+	// with the label instead of having to trust it.
+	return {
+		...result,
+		items: result.items.map((item) => {
+			const text = typeof item.text === "string" ? item.text : "";
+			const classified = classifyComment(text);
+			return { ...item, stance: classified.stance, stance_signals: classified.signals };
+		}),
+	};
+}
+
+// The comment icon lives in an action rail that the page redraws while the
+// work settles, so a coordinate measured in one frame can be stale by the next
+// and the press lands on whatever moved under it. Playwright's locator click
+// waits for the element to be actionable and retries, which is the behaviour
+// this needs; the page guard is armed first so the click still fails closed if
+// the work changed underneath.
+export async function openComments(session: Session, input: Input, signal: AbortSignal): Promise<void> {
+	// The rail is not in the DOM until the work has rendered, and arming a control
+	// that does not exist yet fails before the locator can wait for it. Waiting
+	// for the icon itself is what makes the following click meaningful.
+	// A work page renders its comment list without any toggle: the rows and the
+	// composer are already in the document, just far below the fold. Waiting for
+	// an icon there would time out on a panel that is already open.
+	const rows = await session.tab.locator('[data-e2e="comment-item"]').count();
+	if (rows === 0) {
+		await session.tab
+			.locator(
+				'[data-e2e="feed-comment-icon"],[data-e2e="video-player-comment"],[data-e2e="note-comment"],[data-e2e="comment-button"]',
+			)
+			.first()
+			.waitFor({ state: "attached", timeout: 5000 });
+		await delay(150, undefined, { signal });
+	}
+	if (rows > 0) return;
+	await session.call("arm-comment-open", { ...input, token: randomUUID() });
+	// Only the marked control is clicked. Listing the page's own selectors beside
+	// the marker would let the locator pick a different icon than the one the
+	// guard armed, and then neither the click nor the guard means anything.
+	await session.tab.locator("[data-douyin-cli-control]").first().click({ timeout: 5000, signal });
+}
+
+export async function listReplies(session: Session, input: Input, signal: AbortSignal): Promise<unknown> {
+	const args = { video_id: input.video_id, comment_id: input.comment_id };
+	await session.call("video.info", args);
+	await control(session, "comment.open", args);
+	const read = async () => {
+		const rows = await session.call<Record<string, unknown>[]>("comment.list", args);
+		const unique = new Map<string, Record<string, unknown>>();
+		for (const row of rows) {
+			if (row.parent_id === input.comment_id && typeof row.id === "string") unique.set(row.id, row);
+		}
+		return [...unique.values()];
+	};
+	const collected = new Map<string, Record<string, unknown>>();
+	const collect = (rows: Record<string, unknown>[]) => {
+		for (const row of rows) if (typeof row.id === "string") collected.set(row.id, row);
+	};
+	collect(await read());
+	let clicks = 0;
+	let stop = "step_limit";
+	while (clicks < (input.steps ?? 1) && collected.size < (input.limit ?? 20)) {
+		signal.throwIfAborted();
+		const point = await session.call<Point | null>("comment.expand", { ...args, token: randomUUID() });
+		if (!point) {
+			stop = "no_control";
+			break;
+		}
+		const before = collected.size;
+		await session.click(point);
+		clicks++;
+		let changed = false;
+		for (let attempt = 0; attempt < 10; attempt++) {
+			await delay(200, undefined, { signal });
+			collect(await read());
+			if (collected.size > before) {
+				changed = true;
+				break;
+			}
+		}
+		if (!changed) {
+			stop = "no_progress";
+			break;
+		}
+	}
+	if (collected.size >= (input.limit ?? 20)) stop = "limit";
+	return {
+		video_id: input.video_id,
+		parent_id: input.comment_id,
+		items: [...collected.values()].slice(0, input.limit ?? 20),
+		scope: "loaded_dom",
+		complete: false,
+		clicks,
+		stop,
+	};
+}
