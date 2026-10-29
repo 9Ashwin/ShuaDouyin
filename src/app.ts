@@ -5,6 +5,7 @@ import { CliError, normalizeError } from "./errors.ts";
 import { Knowledge, knowledgeOperation, validateKnowledge } from "./knowledge.ts";
 import type { Memory } from "./memory/concept.ts";
 import { migrateLegacyLayout } from "./migrate.ts";
+import { cachedComments } from "./operations/cached-comments.ts";
 import { audio, capture, noteImage, noteSlide, observe } from "./operations/capture.ts";
 import { captureChatImage, listChats, readChat } from "./operations/chat.ts";
 import { compareChatWindows } from "./operations/chat-diff.ts";
@@ -135,6 +136,10 @@ export class App {
 		if (operation === "update") return updateReport(input.force === true);
 		if (operation === "skill.status") return skillStatus();
 		if (local) return new Knowledge(this.store.base).execute(operation, input, signal);
+		// A cached read is the point of not needing the browser: it must not
+		// connect, must not take the operation lock, and must not care whether
+		// Chrome is running. Chrome's own cache files are only read.
+		if (operation === "comment.list" && input.from_cache) return cachedComments(this.store.path("chrome"), input);
 		if (operation === "skill.install") return skillInstall(undefined, { force: input.force });
 		const run = async (botSignal?: AbortSignal) => {
 			return this.store.withLock(async (leaseSignal) => {

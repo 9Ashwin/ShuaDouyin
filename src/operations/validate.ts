@@ -83,6 +83,9 @@ export interface Input {
 	event_id?: string;
 	budget?: number;
 	apply?: boolean;
+	// Read a previous session's cached response instead of the live page. Only
+	// commands that can answer from what was already fetched accept it.
+	from_cache?: boolean;
 }
 
 export function isWrite(operation: string): boolean {

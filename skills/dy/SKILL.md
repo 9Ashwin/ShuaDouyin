@@ -103,6 +103,7 @@ dy video observe --at 200 --seconds 4 --frames 2
 dy video info                   # 当前作品的身份、播放状态、时长
 dy video open <id-or-url>
 dy comment list --limit 20      # 每条带 stance 和 likes
+dy comment list --from-cache    # 读上次缓存过的，不开 Chrome
 dy comment replies --comment-id <id>
 dy page scroll --target comments --pixels 600
 ```
@@ -110,6 +111,8 @@ dy page scroll --target comments --pixels 600
 `comment list` 每条带 `stance`（`about_work` / `about_self` / `asking` / `spam` / `unknown`）和 `likes`。回之前看 stance，对着「在说自己」的评论夸「唱得好」是错位的。
 
 **它自己开的面板会自己关**，所以读完能直接 `feed next`。面板挡着翻页箭头时用 `dy comment close`。
+
+`--from-cache` 不开 Chrome，读的是这个号上次在 `~/.dy/chrome` 里留下的响应。看 `cache_age_seconds` 判断多旧，`mine` 会是 `null`。要现在的情况就读页面。
 
 ### 学这个区的写法
 
