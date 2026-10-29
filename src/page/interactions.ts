@@ -44,6 +44,8 @@ export interface Args {
 	// Live room gift identity: a name and the price the caller expects.
 	name?: string;
 	price?: number;
+	// Playback position in seconds, for video.seek.
+	at?: number;
 	query?: string;
 	group?: number;
 	choice?: number;

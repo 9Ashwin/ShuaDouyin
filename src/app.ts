@@ -10,8 +10,9 @@ import { compareChatWindows } from "./operations/chat-diff.ts";
 import { chatHistory } from "./operations/chat-history.ts";
 import { sendChatImage } from "./operations/chat-image.ts";
 import { sendCommentImage } from "./operations/comment-image.ts";
-import { closeComments, listComments, listReplies } from "./operations/comments.ts";
+import { closeComments, commentVoice, listComments, listReplies } from "./operations/comments.ts";
 import { inspectCreator } from "./operations/creator.ts";
+import { digest } from "./operations/digest.ts";
 import { pageFactsRead } from "./operations/facts.ts";
 import { readImage } from "./operations/image-file.ts";
 import { resolveLink } from "./operations/links.ts";
@@ -412,6 +413,12 @@ export class App {
 				// refuses when the composer holds a draft, and that refusal is kept.
 				await closeChatIfOpen(session, signal);
 				return session.call(operation, input);
+			case "video.seek":
+				await closeChatIfOpen(session, signal);
+				// The CLI spells the position `position`; the page calls it `at`.
+				// Passing the input through unchanged left the page without a
+				// number and every seek failed as "non-negative position required".
+				return session.call(operation, { ...input, at: input.position });
 			case "feed.next":
 			case "feed.previous":
 				// The feed can sit on a live slide, which has no work identity, so the
@@ -425,6 +432,8 @@ export class App {
 				});
 			case "comment.list":
 				return listComments(session, input, signal);
+			case "comment.voice":
+				return commentVoice(session, input, signal);
 			case "comment.replies":
 				return listReplies(session, input, signal);
 			case "comment.close":
@@ -465,6 +474,8 @@ export class App {
 			case "note.next":
 			case "note.previous":
 				return noteSlide(session, input, operation === "note.next" ? "next" : "previous", signal);
+			case "video.digest":
+				return digest(session, this.store, input, signal);
 			case "video.observe":
 				return observe(session, this.store, input, signal);
 			case "video.audio":

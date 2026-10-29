@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Point, Session, Snapshot } from "../browser.ts";
 import { classifyComment } from "../comment-stance.ts";
+import { profileVoice, voiceGuidance } from "../voice.ts";
 import { control, listResults } from "./navigation.ts";
 import type { Input } from "./validate.ts";
 
@@ -30,6 +31,33 @@ export async function listComments(session: Session, input: Input, signal: Abort
 			const classified = classifyComment(text);
 			return { ...item, stance: classified.stance, stance_signals: classified.signals };
 		}),
+	};
+}
+
+// How this section writes, so a draft can sound like it belongs here. The
+// profile is per work: two sections read minutes apart had a median length of
+// 11 and 28 characters, so a single global style would be wrong for both.
+export async function commentVoice(session: Session, input: Input, signal: AbortSignal): Promise<unknown> {
+	const listed = (await listComments(session, input, signal)) as {
+		items?: { text?: string; stance?: string }[];
+		complete?: boolean;
+	};
+	const samples = (listed.items ?? [])
+		.filter((item) => item.text)
+		.map((item) => ({ text: item.text ?? "", stance: item.stance }));
+	const profile = profileVoice(samples);
+	return {
+		video_id: input.video_id ?? null,
+		sampled: samples.length,
+		complete: listed.complete ?? false,
+		profile,
+		guidance: voiceGuidance(profile),
+		scope: "loaded_comments_of_this_work",
+		limitations: [
+			"Measured from the comments this page had loaded, not from every comment on the work.",
+			"A profile describes the section, not every reader in it. Writing to the median is a start, not a rule.",
+			"Imitating a section is a style choice; it does not make a comment worth reading.",
+		],
 	};
 }
 

@@ -731,6 +731,31 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			guardVideo(args.video_id);
 			currentVideo().pause();
 			return readPageState();
+		case "video.seek": {
+			guardVideo(args.video_id);
+			const element = currentVideo();
+			const at = args.at;
+			if (typeof at !== "number" || !Number.isFinite(at) || at < 0)
+				fail("invalid_argument", "A seek needs a non-negative position in seconds");
+			const duration = element.duration;
+			if (!Number.isFinite(duration) || duration <= 0) fail("unsupported_media", "This work has no seekable duration");
+			// A position past the end is not an error to be clamped silently: the
+			// caller asked for a time this work does not have, and saying so is more
+			// useful than returning a frame from somewhere else.
+			if (at > duration) fail("invalid_argument", `--at is past the end of this work (${duration.toFixed(1)}s)`);
+			element.currentTime = at;
+			// seeked fires asynchronously; reading immediately reports the old time.
+			await new Promise<void>((resolve) => {
+				if (Math.abs(element.currentTime - at) < 0.25 && element.readyState >= 2) return resolve();
+				const done = () => {
+					element.removeEventListener("seeked", done);
+					resolve();
+				};
+				element.addEventListener("seeked", done);
+				setTimeout(done, 4000);
+			});
+			return readPageState();
+		}
 		case "video.audio":
 			return recordAudio(args.seconds);
 		case "user.relation.prepare": {

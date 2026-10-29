@@ -22,7 +22,7 @@ function sameVideo(left: Snapshot, right: Snapshot): boolean {
 	);
 }
 
-async function captureSnapshot(
+export async function captureSnapshot(
 	session: Session,
 	store: { path: (name: string) => string },
 	output?: string,
@@ -145,6 +145,10 @@ export async function observe(
 	input: Input,
 	signal: AbortSignal,
 ): Promise<unknown> {
+	// A long work is only ever seen at its opening unless the caller can say
+	// where to look. Seeking first turns one observation into a window anywhere
+	// in the work, which is what reading a 7-minute talk actually needs.
+	if (input.position !== undefined) await session.call("video.seek", { ...input, at: input.position });
 	const initial = await session.call<Snapshot>("video.info", input);
 	if (!initial.video) throw new CliError("unsupported_media", "Playback observation requires a video");
 	const frames: (Awaited<ReturnType<typeof capture>> & { elapsed_ms: number; captured_at: string })[] = [];

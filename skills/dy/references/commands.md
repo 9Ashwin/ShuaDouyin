@@ -87,14 +87,22 @@ dy note capture --index 0 --output x.png
 ## 播放与取样
 
 ```bash
-dy video play [--video-id <id>]  # 播放
-dy video pause [--video-id <id>] # 暂停
+dy video digest [--frames 3 --limit 8]    # 标题 + 三帧 + 评论，判断这条在讲什么
+dy video seek --at 120                    # 跳到第 120 秒
+dy video observe --at 200 --seconds 4 --frames 2   # 在指定位置采样
+dy video play [--video-id <id>]           # 播放
+dy video pause [--video-id <id>]          # 暂停
 dy video screenshot --output x.png
-dy video observe --seconds 8 --frames 6   # 采样帧 + 播放状态
 dy video audio --seconds 10 --output a.webm
 ```
 
-`video.observe` 是采样，返回 `complete: false` 和实际采到的帧。它不做内容识别——看清实况要连续多次采样并对比。
+**`video digest` 是判断内容的第一选择。** 一条命令、3–4 秒，返回标题、三个位置的画面（25%/50%/75%，避开开头封面语和结尾求关注）和评论区摘录。长视频只看开头等于没看。
+
+`--frames 0` 跳过所有采样只读评论（最快）；短片自动不采样并说明原因。
+
+`video.seek` 越界会**拒绝**而不是截断——传了超出时长的位置说明你猜错了时长，需要知道。
+
+`video observe` 是采样，返回 `complete: false` 和实际采到的帧。它不做内容识别——看清实况要连续多次采样并对比。`--at` 可以指定起点，不用总从开头看。
 
 ## 互动
 
@@ -116,12 +124,31 @@ dy comment replies --comment-id <id>             # 展开某条评论的回复
 dy comment post --text "…"                       # 发顶层评论
 dy comment reply --comment-id <id> --text "…"    # 回复某条评论
 dy comment image --image <路径>                  # 发图片评论
+dy comment voice [--limit 20]                    # 学这个区怎么写
 dy comment close                                 # 关掉评论面板
 ```
 
 发表评论必须带 `--request-id`（全局参数）。`comment list` 的每条都带 `stance`：`about_work` / `about_self` / `asking` / `spam` / `unknown`。回之前看它，对着「在说自己」的评论夸「唱得好」是错位的。
 
 `comment list` 自己开的面板会自己关，所以读完能直接 `feed next`。如果面板是你手动开的、或者关不掉，用 `dy comment close`。**面板挡着翻页箭头时 `feed next` 会报「The feed did not move」**，不是页面坏了。
+
+### 学这个区怎么写
+
+```bash
+dy comment voice --limit 20
+```
+
+返回这一条作品的评论区画像：中位长度、连续感叹号比例、反复出现的称呼、直呼作者的比例、第一人称比例、提问比例，每条都带计数。另有 `guidance` 把这些数字翻成人话。
+
+**按作品算，不按全局算。** 实测两条视频，一条中位 11 字，另一条中位 46 字、p90 102 字——差四倍。用一套全局风格套所有区，两头都不像。
+
+典型输出（长句区）：
+
+> Comments here run long: median 46 characters. A one-line reply reads as a tourist.
+> 40% use repeated exclamation marks. One is punctuation; two or three is how people here sound.
+> 50% address the author directly. Writing about the work without addressing anyone is the minority style.
+
+**写之前先跑一次。** 对着中位数写，比凭感觉写更接近本地口吻。但注意：模仿风格不等于评论有价值——那是两件事。
 
 ## 私信
 

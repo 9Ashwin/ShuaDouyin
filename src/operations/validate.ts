@@ -54,6 +54,8 @@ export interface Input {
 	scrolls?: number;
 	steps?: number;
 	index?: number;
+	// Playback position in seconds, for seeking and for sampling a chosen window.
+	position?: number;
 	offset?: number;
 	timezone?: string;
 	pixels?: number;

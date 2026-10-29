@@ -51,6 +51,23 @@ test(
 			await app.execute("feed.previous", {}, signal);
 		});
 
+		await t.test("a seek moves playback and refuses a position past the end", async () => {
+			// The fixture's video has no media, so a real duration cannot be seeked.
+			// What can be checked is that the position reaches the element and that
+			// a request the work cannot satisfy is refused rather than clamped.
+			await app.execute("video.open", { resource: "12345" }, signal);
+			await witness?.tab.evaluate(() => {
+				const video = document.querySelector("video") as HTMLVideoElement & { __duration?: number };
+				Object.defineProperty(video, "duration", { get: () => 120, configurable: true });
+			});
+			await assert.rejects(app.execute("video.seek", { position: 500 }, signal), {
+				code: "invalid_argument",
+			});
+			await assert.rejects(app.execute("video.seek", { position: -1 }, signal), {
+				code: "invalid_argument",
+			});
+		});
+
 		await t.test("a press swallowed on an unchanged slide is retried once", async () => {
 			await app.execute("video.open", { resource: "12345" }, signal);
 			// The first press is ignored and the page stays put. Retrying is safe

@@ -723,6 +723,23 @@ export const COMMANDS: CommandSpec[] = [
 	{ id: "video.play", description: "Play the current video", flags: [video], effect: "navigation" },
 	{ id: "video.pause", description: "Pause the current video", flags: [video], effect: "navigation" },
 	{
+		id: "video.seek",
+		description: "Move playback to a position in seconds",
+		flags: [
+			video,
+			{
+				key: "position",
+				name: "--at <seconds>",
+				description: "Position to seek to, within the work's duration",
+				type: "number",
+				required: true,
+			},
+		],
+		effect: "navigation",
+		guidance:
+			"Without this, every observation samples from the start and a long work is only ever seen at its opening. A position past the end is refused rather than clamped, so a caller that guessed a duration learns it was wrong. Seeking does not wait for the new frame to decode; read video info or observe afterwards to see what actually shows.",
+	},
+	{
 		id: "note.capture",
 		description: "Save one currently visible image from an image post",
 		flags: [
@@ -775,6 +792,25 @@ export const COMMANDS: CommandSpec[] = [
 		effect: "local",
 	},
 	{
+		id: "video.digest",
+		description: "Gather what a work is about: identity, sampled positions and loaded comments",
+		flags: [
+			video,
+			{
+				key: "frames",
+				name: "--frames <count>",
+				description: "Positions to sample: 0 for none, 1, or 3 (default 3); 0 skips all seeking",
+				type: "number",
+				default: 3,
+			},
+			{ key: "limit", name: "--limit <count>", description: "Comments to read (default 8)", type: "number" },
+			{ key: "output", name: "--output <directory>", description: "Frame output directory", type: "string" },
+		],
+		effect: "local",
+		guidance:
+			"A title states the form, not the point. Three positions inside a work carry the argument, and the comment section says who is watching and what they took from it. Sampling avoids the opening and the end, which are the least informative parts. Frames are viewport screenshots and are labelled as samples, never as a claim about the whole work. A work under 15 seconds is not sampled: it is its own summary. Use --frames 0 to skip seeking entirely.",
+	},
+	{
 		id: "video.observe",
 		description: "Sample frames and playback state from the current video",
 		flags: [
@@ -787,6 +823,12 @@ export const COMMANDS: CommandSpec[] = [
 			},
 			{ key: "frames", name: "--frames <count>", description: "Number of PNG frames", type: "number", default: 3 },
 			{ key: "output", name: "--output <directory>", description: "Frame output directory", type: "string" },
+			{
+				key: "position",
+				name: "--at <seconds>",
+				description: "Seek here before sampling, to look past the opening",
+				type: "number",
+			},
 		],
 		effect: "local",
 		guidance:
@@ -815,6 +857,17 @@ export const COMMANDS: CommandSpec[] = [
 		effect: "navigation",
 		guidance:
 			"comment list opens the panel and leaves it open. The panel covers the right edge of the player, so feed next fails with 'the feed did not move' until it is closed. Safe to run when nothing is open.",
+	},
+	{
+		id: "comment.voice",
+		description: "Measure how this section writes, so a draft can sound local",
+		flags: [
+			video,
+			{ key: "limit", name: "--limit <count>", description: "Comments to read (default 20)", type: "number" },
+		],
+		effect: "navigation",
+		guidance:
+			"Returns length, exclamation habit, repeated openers, direct address, first person and questions, each with the count behind it, plus guidance lines. Measured per work: two sections read minutes apart had a median length of 11 and 28 characters. The profile describes the section, not every reader — writing to the median is a start, not a rule.",
 	},
 	{
 		id: "comment.list",
