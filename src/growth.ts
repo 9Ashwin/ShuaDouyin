@@ -101,6 +101,11 @@ export class Growth {
 				"Search first, then add or revise durable memories using the returned event:<account>:<id> sources.",
 				"Review share receipts separately; dispatching is uncertain and does not establish delivery. Receipts do not advance event checkpoints.",
 				"Keep owner statements separate from tentative impressions; update persona and profiles with revision checks when justified.",
+				// The persona is not only what the agent decides to write: the voice
+				// section is measured from this account's own comments and is meant to
+				// keep moving. Running it here is what makes that automatic instead of
+				// something a caller has to remember.
+				"Run persona evolve after a round that included commenting. It rewrites one section of AGENTS.md from what this account actually wrote, and refuses until there are enough comments to describe a voice.",
 				"Save a caller-authored report when requested; acknowledge each pending event in order only after saving relevant outcomes.",
 			],
 		};

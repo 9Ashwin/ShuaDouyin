@@ -246,6 +246,22 @@ export const COMMANDS: CommandSpec[] = [
 		effect: "local",
 	},
 	{
+		id: "persona.evolve",
+		description: "Rewrite the persona's derived voice section from what this account actually wrote",
+		flags: [
+			{
+				key: "dry_run",
+				name: "--dry-run",
+				description: "Report what the section would become without writing it",
+				type: "boolean",
+				default: false,
+			},
+		],
+		guidance:
+			"Rewrites one section of AGENTS.md and leaves the rest of the file untouched. Everything it writes is measured from this account's own sent comments, so the persona grows from evidence instead of from a guess: comment length, exclamation and emoji habits, questions, direct address, first person, and repeated openers. Run it after a browsing round; an unchanged measurement leaves the section as it is. It never invents a trait it cannot measure, which is why the section describes how the bot writes rather than who it is.",
+		effect: "local",
+	},
+	{
 		id: "growth.event",
 		description: "Retrieve one activity source belonging to the selected bot",
 		flags: [],

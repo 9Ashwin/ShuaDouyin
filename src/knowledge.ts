@@ -23,6 +23,7 @@ import {
 import { chatHistory } from "./operations/chat-history.ts";
 import { acknowledged, diagnostics, splitByFix } from "./operations/diagnostics.ts";
 import { addGoal, discover, pauseGoal } from "./operations/discover.ts";
+import { evolvePersona, personaSection, presetOf } from "./operations/persona-evolve.ts";
 import { resetApply, resetPlan } from "./operations/reset.ts";
 import { parseSources, signals } from "./operations/signals.ts";
 import {
@@ -51,6 +52,7 @@ export function knowledgeOperation(operation: string): boolean {
 		operation.startsWith("browse.") ||
 		operation === "diagnostics" ||
 		operation === "diagnostics-ack" ||
+		operation === "persona.evolve" ||
 		/^(bot|workspace|memory|context|report|onboarding|growth)\./.test(operation)
 	);
 }
@@ -317,6 +319,18 @@ export class Knowledge {
 						),
 					);
 				});
+			case "persona.evolve": {
+				// A dry run must not take the write path: it reports what the section
+				// would become, and the same measurement is what the write uses.
+				if (input.dry_run) {
+					const current = await personaSection(this.workspaces);
+					const store = new Store(this.workspaces.base);
+					const preview = await evolvePersona(this.workspaces, store, { write: false });
+					return { ...preview, current, preset: presetOf(current) };
+				}
+				const store = new Store(this.workspaces.base);
+				return evolvePersona(this.workspaces, store);
+			}
 			case "growth.ack":
 				return new Growth(this.workspaces).acknowledge(input.event_id ?? "");
 			case "growth.event":
