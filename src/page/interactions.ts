@@ -90,11 +90,13 @@ interface Prepared {
 	emoji?: string;
 	dispatched: boolean;
 	blocked: boolean;
+	// Why the guard refused the click, when it did.
+	reason?: string;
 }
 interface Guard {
 	token: string;
 	cleanup: () => void;
-	state: { dispatched: boolean; blocked: boolean };
+	state: { dispatched: boolean; blocked: boolean; reason?: string };
 }
 declare global {
 	interface Window {
@@ -128,7 +130,7 @@ export function installGuard(
 	button: HTMLElement,
 	token: string,
 	check: () => void,
-	state = { dispatched: false, blocked: false },
+	state: { dispatched: boolean; blocked: boolean; reason?: string } = { dispatched: false, blocked: false },
 ): void {
 	window.__douyinCLIGuard?.cleanup();
 	const listener = (event: Event) => {
@@ -143,8 +145,21 @@ export function installGuard(
 				fail("identity_mismatch", "Control changed");
 			check();
 			if (event.type === "click") state.dispatched = true;
-		} catch {
+		} catch (error) {
+			// This is where a refused dispatch is decided, and the reason was being
+			// thrown away: the caller was told only that the target or draft had
+			// changed, never which check refused or what it saw. Keep the reason so
+			// the failure names itself.
 			state.blocked = true;
+			state.reason =
+				error && typeof error === "object" && "code" in error
+					? String((error as { message?: unknown }).message ?? "")
+					: error instanceof Error
+						? error.message
+						: "";
+			// The witness the caller reads after the click is a different object;
+			// carry the reason across so writeResult can report it.
+			if (window.__douyinCLI && window.__douyinCLI.token === token) window.__douyinCLI.reason = state.reason;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 		}
@@ -442,8 +457,17 @@ export function armWrite(args: Args): Point {
 	const check = () => {
 		guardPage();
 		if (args.action === "chat.send") {
-			if (chatSignature() !== state.signature || watermark() !== state.watermark)
-				fail("identity_mismatch", "Conversation or message history changed before send");
+			// Which of the two changed is the whole diagnosis: a different
+			// conversation means the panel moved, a different watermark means the
+			// history grew under the composer. Reporting one sentence for both left
+			// a caller with nothing to act on, and a send that failed this way could
+			// not be told apart from one that failed on a slow history load.
+			const signature = chatSignature();
+			if (signature !== state.signature)
+				fail("identity_mismatch", "The open conversation changed before send", JSON.stringify({ signature }));
+			const mark = watermark();
+			if (mark !== state.watermark)
+				fail("identity_mismatch", "Message history changed before send", JSON.stringify({ watermark: mark }));
 		} else {
 			guardVideo(args.video_id);
 			if (commentEditor(args.comment_id).editor !== state.editor) fail("identity_mismatch", "Comment composer changed");
@@ -493,7 +517,8 @@ export function writeResult(args: Args) {
 	if (!state) fail("identity_mismatch", "Send witness no longer exists", `expected ${args.token}, found none`);
 	if (state.token !== args.token)
 		fail("identity_mismatch", "Send witness no longer exists", `expected ${args.token}, found ${state.token}`);
-	if (state.blocked) return { confirmed: false, blocked: true, dispatched: state.dispatched };
+	if (state.blocked)
+		return { confirmed: false, blocked: true, dispatched: state.dispatched, blocked_reason: state.reason ?? null };
 	const rows = args.action === "chat.send" ? readChat(args.conversation_id).messages : readComments(args.video_id);
 	// A mention is delivered as text too: the row reads "@name text", so the row
 	// this send produced never equals the body alone. Both spellings are

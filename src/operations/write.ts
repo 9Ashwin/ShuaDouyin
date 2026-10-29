@@ -90,6 +90,9 @@ export async function write(
 	// page happened not to expose it at review time.
 	let authorID: string | null = null;
 	let workAuthorID: string | null = null;
+	// True once this attempt has typed into a composer. Everything in that editor
+	// from then on came from this command, so a failure may clear it.
+	let typed = false;
 	try {
 		if (operation === "chat.forward") {
 			// The work must be the page's current work before its panel opens.
@@ -224,6 +227,12 @@ export async function write(
 			// node the page inserts, and typing the text first would leave the picker
 			// filtering against the wrong prefix.
 			if (action === "chat.send" && input.mention) await mentionMember(session, input, signal);
+			// From the first inserted character this command owns the composer, so
+			// anything in it afterwards is this attempt's residue. A send that then
+			// fails used to leave its own text behind, and the next send to that
+			// conversation was refused as a draft conflict — one failure made every
+			// later attempt fail, and chat close refused too because it was a draft.
+			typed = true;
 			await session.tab.keyboard.insertText(input.text ?? "");
 			// In a comment a sticker is a fragment rather than a message, so it is
 			// picked after the text and lands at its end.
@@ -276,7 +285,16 @@ export async function write(
 				: await settle(session, args, signal);
 		if (confirmed.blocked && !confirmed.dispatched) {
 			mayHaveDispatched = false;
-			throw new CliError("identity_mismatch", "Input was blocked because the target or draft changed");
+			// The guard knows which check refused; without carrying that through,
+			// every refusal read the same and none of them could be acted on.
+			const reason =
+				confirmed && typeof confirmed === "object" && "blocked_reason" in confirmed
+					? String((confirmed as { blocked_reason?: unknown }).blocked_reason ?? "")
+					: "";
+			throw new CliError("identity_mismatch", "Input was blocked because the target or draft changed", {
+				hint: reason ? `The page refused the click: ${reason}` : "",
+				details: reason ? { blocked_reason: reason } : undefined,
+			});
 		}
 		if (!confirmed.result) {
 			const candidate = confirmed.record;
@@ -328,6 +346,10 @@ export async function write(
 		step("confirmed", { request_id: key });
 		return { request_id: key, confirmed: true, changed: true, result: confirmed.result };
 	} catch (error) {
+		// Clear this attempt's own typing before anything else. Nothing is sent, so
+		// the text is residue, and leaving it makes the composer look like a user
+		// draft to every later command on this conversation.
+		if (typed && !mayHaveDispatched) await clearComposer(session, action);
 		if (receipt && !mayHaveDispatched) {
 			receipt.status = "not_sent";
 			receipt.updated_at = new Date().toISOString();
@@ -384,11 +406,25 @@ async function replyComposerReady(session: Session, commentID: string, signal: A
 // Only the CLI's own trigger text is removed here: an existing user draft is
 // refused before this point, so anything in the composer at failure time is
 // residue from this attempt.
-async function clearComposer(session: Session): Promise<void> {
-	const editor = session.tab.locator('[data-e2e="im-dialog"] [data-e2e="msg-input"] [contenteditable="true"]').first();
-	await editor.click();
-	await session.tab.keyboard.press("Meta+A");
-	await session.tab.keyboard.press("Backspace");
+async function clearComposer(session: Session, action = "chat.send"): Promise<void> {
+	// The chat composer is the one this function was written for. A comment
+	// failure left its text behind the same way, so the comment editor is cleared
+	// by the same rule: select the whole editor and delete, which the page's own
+	// editor handles as a user edit.
+	const editor =
+		action === "chat.send"
+			? session.tab
+					.locator(
+						'[data-e2e="im-dialog"] [data-e2e="msg-input"] [contenteditable="true"],[data-e2e="im-dialog"] [contenteditable="true"]',
+					)
+					.first()
+			: session.tab.locator('[class*="comment-input"] [contenteditable="true"],[data-e2e="comment-input"]').first();
+	await editor.click({ timeout: 2000 }).catch(() => undefined);
+	// One select-all, chosen by platform. Pressing both was tried and is wrong:
+	// on macOS the editor treats Control+A as a move-to-line-start, which drops
+	// the selection Meta+A had just made, and the Backspace then deleted nothing.
+	await session.tab.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A").catch(() => undefined);
+	await session.tab.keyboard.press("Backspace").catch(() => undefined);
 }
 
 // Typing @ opens the group member picker; choosing an entry turns it into a real
