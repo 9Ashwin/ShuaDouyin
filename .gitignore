@@ -23,3 +23,7 @@ token.env
 # points DY_STATE_DIR at the checkout must not be able to commit them.
 /.dy/
 /.dy-backup-*/
+
+# Written by prepare from the checkout's HEAD so an installed copy, which has
+# no .git, can still say which commit it was built from.
+/.dy-build-commit

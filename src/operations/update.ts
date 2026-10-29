@@ -61,8 +61,12 @@ export function installShape(): InstallShape {
 			has_source: true,
 		};
 	}
-	// A managed release carries the commit in a file beside the build.
-	const marker = join(entry, "..", "commit");
+	// An installed copy has no .git, so it records the commit it was built from
+	// beside the build. The managed installer writes its own marker; a plain npm
+	// install gets one from prepare.
+	const marker = existsSync(join(entry, ".dy-build-commit"))
+		? join(entry, ".dy-build-commit")
+		: join(entry, "..", "commit");
 	const head = existsSync(marker) ? readCommit(marker) : null;
 	const managed = existsSync(join(entry, "..", ".dy-release-owner"));
 	const global = entry.includes(`${join("lib", "node_modules")}`) || entry.includes(`${join("pnpm", "global")}`);

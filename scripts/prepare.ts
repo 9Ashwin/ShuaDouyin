@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 
 // `npm install -g github:...` installs the source, then runs `prepare` with
 // devDependencies present. Nothing else builds it: a `prepare` that only
@@ -14,6 +14,21 @@ import { existsSync } from "node:fs";
 function run(command: string, args: string[]): void {
 	execFileSync(command, args, { stdio: "inherit" });
 }
+
+// An installed copy has no .git, so the only way it can say which commit it is
+// is by writing that down before the checkout goes away. Without this, `dy
+// update --check` could fetch the newest commit and still not know whether this
+// copy was older — the comparison had one side missing.
+function commit(): string | null {
+	try {
+		return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+	} catch {
+		return null;
+	}
+}
+
+const head = commit();
+if (head) writeFileSync(".dy-build-commit", head, "utf8");
 
 run(process.execPath, ["scripts/build.ts"]);
 
