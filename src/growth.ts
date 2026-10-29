@@ -105,7 +105,8 @@ export class Growth {
 				// section is measured from this account's own comments and is meant to
 				// keep moving. Running it here is what makes that automatic instead of
 				// something a caller has to remember.
-				"Run persona evolve after a round that included commenting. It rewrites one section of AGENTS.md from what this account actually wrote, and refuses until there are enough comments to describe a voice.",
+				"Run persona evolve after a round that included commenting. It rewrites one section of AGENTS.md from what this account actually wrote, and refuses until there are at least five comments spanning two days — a voice is what stays the same across days, not within one evening.",
+				"Run learn keep when this round taught something. It proposes findings it can support from the activity, takes your own conclusion with --note, and deduplicates against what is already kept. lessons.md is what context show hands the next round.",
 				"Save a caller-authored report when requested; acknowledge each pending event in order only after saving relevant outcomes.",
 			],
 		};

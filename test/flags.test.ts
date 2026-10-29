@@ -84,3 +84,42 @@ test("every command declares an effect the dispatcher understands", () => {
 	const known = new Set(["read", "navigation", "local", "account_write"]);
 	for (const command of COMMANDS) assert.ok(known.has(command.effect), `${command.id} has effect ${command.effect}`);
 });
+
+test("no command redeclares a global flag, which would shadow the real value", async () => {
+	// learn.keep, persona.migrate and persona.evolve each declared their own
+	// --dry-run with default:false. Commander applied that local default after the
+	// global value, so input.dry_run was always false while the response still
+	// printed dry_run:true — a dry run that wrote to disk and said it had not.
+	// The check is on the declaration, because the failure is in how the two
+	// declarations combine and no single command can see it.
+	const { GLOBAL_FLAGS } = await import("../src/catalog.ts");
+	const globals = new Set(
+		GLOBAL_FLAGS.map((flag) => flag.name.replace(/^--/, "").split(" ")[0]?.replaceAll("-", "_") ?? ""),
+	);
+	// browser.configure is the one command whose job is to change a global setting:
+	// its --chrome is the value being written, not a shadow of the one being read.
+	const writesTheGlobal = new Set(["browser.configure:chrome"]);
+	const clashing = COMMANDS.flatMap((command) =>
+		(command.flags ?? [])
+			.filter((flag) => globals.has(flag.key as string))
+			.map((flag) => `${command.id}:${String(flag.key)}`)
+			.filter((pair) => !writesTheGlobal.has(pair)),
+	);
+	assert.deepEqual(clashing, [], "a command flag with the same key as a global one shadows it");
+});
+
+test("a dry run over a local command writes nothing", async (t) => {
+	// The behavioural half of the rule the check above protects, exercised through
+	// the CLI so the argument wiring is what runs.
+	const { execFile } = await import("node:child_process");
+	const { promisify } = await import("node:util");
+	const run = promisify(execFile);
+	const base = await mkdtemp(join(tmpdir(), "dy-dryrun-"));
+	t.after(() => rm(base, { recursive: true, force: true }));
+	await new App({ state_dir: base }).execute("init", { name: "ShuaDouyin" });
+	const before = await run("node", ["dist/cli.js", "--state-dir", base, "workspace", "get", "AGENTS.md"]);
+	const result = await run("node", ["dist/cli.js", "--state-dir", base, "persona", "migrate", "--dry-run"]);
+	assert.equal(JSON.parse(result.stdout).dry_run, true);
+	const after = await run("node", ["dist/cli.js", "--state-dir", base, "workspace", "get", "AGENTS.md"]);
+	assert.equal(JSON.parse(after.stdout).data.revision, JSON.parse(before.stdout).data.revision);
+});

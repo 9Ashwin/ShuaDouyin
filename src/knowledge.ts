@@ -331,7 +331,11 @@ export class Knowledge {
 					);
 				});
 			case "voice.check":
-				return checkVoice(input.text ?? "");
+				// An empty text is not a text that reads well. Returning "reads-human"
+				// for nothing gives the caller a passing verdict on something it never
+				// supplied.
+				if (!input.text?.trim()) throw new CliError("invalid_argument", "voice check needs --text to read something");
+				return checkVoice(input.text);
 			case "learn.keep": {
 				const store = new Store(this.workspaces.base);
 				return keepFindings(this.workspaces, await store.events(), {

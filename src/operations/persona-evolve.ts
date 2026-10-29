@@ -247,6 +247,8 @@ export interface Migration {
 	placement: "after-workspace" | "appended" | null;
 	before: string;
 	after: string;
+	// The version the replaced state was kept as, when something was written.
+	snapshot?: number | null;
 }
 
 // Move a workspace created before the persona could grow onto the same words a
@@ -300,7 +302,14 @@ export async function migratePersonaDocument(
 ): Promise<Migration> {
 	const document = await workspaces.document("AGENTS.md");
 	const migrated = migratePersona(document.content);
-	if (migrated.changed && options.write !== false)
+	// A migration replaces text in the persona, so it is a change like any other
+	// and has to be reversible the same way. It used to write straight over the
+	// document, which left the only copy of what it replaced in `workspace
+	// history` — a different store that `persona rollback` cannot reach.
+	let snapshot: number | null = null;
+	if (migrated.changed && options.write !== false) {
+		snapshot = await workspaces.snapshot("AGENTS.md", document.content);
 		await workspaces.setDocument("AGENTS.md", migrated.after, document.revision);
-	return migrated;
+	}
+	return { ...migrated, snapshot };
 }

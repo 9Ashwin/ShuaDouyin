@@ -51,7 +51,10 @@ test("a comment that carried a signal is worth keeping", () => {
 
 test("a round that mostly skipped says what this account does not want", () => {
 	const finding = candidateFindings([
-		{ id: "b1", operation: "browse.end", data: { watched: [1], skipped: [1, 2, 3, 4] } },
+		// The real event nests the counts under summary, as numbers. The first
+		// version of this rule looked for top-level arrays and never fired on a real
+		// round — only on the fixture written to match it.
+		{ id: "b1", operation: "browse.end", data: { id: "r1", summary: { watched: 1, skipped: 4 } } },
 	]);
 	assert.equal(finding.length, 1);
 	assert.equal(finding[0]?.kind, "preference");
@@ -67,6 +70,22 @@ test("a caller's own conclusion is recorded verbatim and marked as authored", as
 	assert.ok(document.content.includes("caller:note"));
 });
 
+test("a failure that has happened more times is still the same lesson", async (t) => {
+	// The count grows every round. Putting it in the comparison appended a new
+	// line each time saying the number had gone up, which is the opposite of
+	// deduplication.
+	const workspaces = await setup(t);
+	const twice = [failure("feed.next", "selector_changed"), failure("feed.next", "selector_changed")];
+	const fourTimes = [...twice, ...twice];
+	await keepFindings(workspaces, twice);
+	const again = await keepFindings(workspaces, fourTimes);
+	assert.equal(again.findings.length, 0);
+	assert.equal(again.duplicates.length, 1);
+	// One entry line, whatever the count says inside it.
+	const document = await workspaces.document("lessons.md");
+	assert.equal(document.content.split("\n").filter((line) => line.startsWith("- [gotcha]")).length, 1);
+});
+
 test("the same lesson is not recorded twice", async (t) => {
 	const workspaces = await setup(t);
 	const events = [failure("feed.next", "selector_changed"), failure("feed.next", "selector_changed")];
@@ -74,8 +93,10 @@ test("the same lesson is not recorded twice", async (t) => {
 	const second = await keepFindings(workspaces, events, { note: "先读再动手" });
 	assert.equal(second.findings.length, 0);
 	assert.equal(second.duplicates.length, 2);
+	// The key inside the comment repeats the phrase, so counting occurrences in the
+	// whole file counted it twice. What matters is one entry line.
 	const document = await workspaces.document("lessons.md");
-	assert.equal(document.content.match(/先读再动手/g)?.length, 1);
+	assert.equal(document.content.split("\n").filter((line) => line.startsWith("- [")).length, 2);
 });
 
 test("a new lesson appends without disturbing the old one", async (t) => {

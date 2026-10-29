@@ -276,13 +276,6 @@ export const COMMANDS: CommandSpec[] = [
 				description: "One conclusion you reached that the tool cannot measure",
 				type: "string",
 			},
-			{
-				key: "dry_run",
-				name: "--dry-run",
-				description: "Report the findings without writing them",
-				type: "boolean",
-				default: false,
-			},
 		],
 		guidance:
 			"Call this when a round taught something worth carrying into the next one. The tool proposes findings it can support from the activity: repeated failures of the same command, comments that carried a signal, rounds that mostly skipped. It cannot say why one of those mattered, so --note records your own conclusion verbatim and is marked as authored. Findings go to lessons.md with their source, are deduplicated against what is already there, and are never rewritten by an update the way the shipped skill is. Read it with workspace get lessons.md and delete what you disagree with.",
@@ -323,15 +316,7 @@ export const COMMANDS: CommandSpec[] = [
 	{
 		id: "persona.migrate",
 		description: "Move a persona created before it could grow onto the current template",
-		flags: [
-			{
-				key: "dry_run",
-				name: "--dry-run",
-				description: "Report what would change without writing it",
-				type: "boolean",
-				default: false,
-			},
-		],
+		flags: [],
 		guidance:
 			"Replaces the retired line that told the bot to keep the owner's settings fixed and never rewrite the persona. That line contradicts the growth section in the same document, and the older, more concrete line wins, so an agent reading it is told both to grow and never to change. Only the exact retired sentence is matched; a persona whose owner has already rewritten it is left alone. Running it twice changes nothing the second time.",
 		effect: "local",
@@ -339,15 +324,7 @@ export const COMMANDS: CommandSpec[] = [
 	{
 		id: "persona.evolve",
 		description: "Rewrite the persona's derived voice section from what this account actually wrote",
-		flags: [
-			{
-				key: "dry_run",
-				name: "--dry-run",
-				description: "Report what the section would become without writing it",
-				type: "boolean",
-				default: false,
-			},
-		],
+		flags: [],
 		guidance:
 			"Rewrites one section of AGENTS.md and leaves the rest of the file untouched. Everything it writes is measured from this account's own sent comments, so the persona grows from evidence instead of from a guess: comment length, exclamation and emoji habits, questions, direct address, first person, and repeated openers. Run it after a browsing round; an unchanged measurement leaves the section as it is. It never invents a trait it cannot measure, which is why the section describes how the bot writes rather than who it is.",
 		effect: "local",

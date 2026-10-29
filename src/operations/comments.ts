@@ -8,6 +8,7 @@ import { measureEngagement, measureWit, profileVoice, voiceGuidance } from "../v
 import { control, listResults } from "./navigation.ts";
 import {
 	availablePhrases,
+	COOLDOWN_DAYS,
 	candidatePhrase,
 	measureSameness,
 	PHRASE_RULE,
@@ -110,7 +111,11 @@ export async function recordPhraseUse(
 	now = new Date(),
 ): Promise<{ text: string; used: number } | null> {
 	if (!text.trim()) return null;
-	const memories = (await known.execute("memory.list", {})) as Memory[];
+	// The ledger is looked up across every memory, not the first page. memory.list
+	// defaults to 20, ordered by update time, so a ledger entry that had not been
+	// touched recently fell off the end and the send silently stopped counting —
+	// the same failure the automatic recording was added to prevent.
+	const memories = (await known.execute("memory.list", { limit: 1000 })) as Memory[];
 	const found = phraseMemories(memories).find((phrase) => phrase.text === text.trim());
 	if (!found) return null;
 	const target = memories.find(
@@ -153,7 +158,10 @@ export function phraseReport(memories: Memory[], now = new Date()): unknown {
 			used: phrase.used,
 			idle_days: phrase.idle_days,
 			// How long until it is worth saying again, rather than a flat "no".
-			resting_days_left: Math.max(0, 14 - phrase.idle_days),
+			// The same constant the status decision uses. Writing 14 here meant a
+			// change to the cooldown would leave this line reporting a different
+			// number from the one that decided the phrase was resting.
+			resting_days_left: Math.max(0, COOLDOWN_DAYS - phrase.idle_days),
 		})),
 		rule: PHRASE_RULE,
 		scope: "phrase_ledger",

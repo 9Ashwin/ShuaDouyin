@@ -28,6 +28,12 @@ export interface Finding {
 	text: string;
 	// What in the activity supports it.
 	source: string;
+	// What makes this finding the same finding on a later round. A failure that
+	// has happened twice and one that has happened four times are the same lesson,
+	// so the count belongs in the text a reader sees and not in this key — putting
+	// it in the comparison made every round append another line saying the number
+	// had gone up.
+	key: string;
 }
 
 // Which events can carry a lesson, and what a lesson from each one reads like.
@@ -72,18 +78,26 @@ export function candidateFindings(events: unknown[]): Finding[] {
 					kind: "method",
 					text: `「${text.slice(0, 40)}」这种写法有反响${signals.length ? `（${signals.join("、")}）` : ""}`,
 					source: `event:${id}`,
+					key: `method:${text.slice(0, 40)}`,
 				});
 			}
 		}
-		// A round that ended with skips says what this account does not want.
+		// A round that ended with more skips than keeps says what this account does
+		// not want. The counts live under summary, and are numbers rather than the
+		// arrays the first version looked for — so this rule never fired on a real
+		// event, only on the fixture written to match it.
 		if (operation === "browse.end" && data) {
-			const skipped = Array.isArray(data.skipped) ? data.skipped.length : 0;
-			const watched = Array.isArray(data.watched) ? data.watched.length : 0;
+			const summary = data.summary as { watched?: unknown; skipped?: unknown } | undefined;
+			const watched = typeof summary?.watched === "number" ? summary.watched : 0;
+			const skipped = typeof summary?.skipped === "number" ? summary.skipped : 0;
 			if (skipped > watched && skipped >= 3)
 				out.push({
 					kind: "preference",
-					text: `这一轮划过 ${skipped} 条、只看 ${watched} 条，这类内容不值得停`,
+					text: `这一轮划过 ${skipped} 条、只看过 ${watched} 条`,
 					source: `event:${id}`,
+					// Each round is its own evidence, so the round is what makes it
+					// distinct; two rounds that skipped a lot are two observations.
+					key: `preference:${id}`,
 				});
 		}
 	}
@@ -95,6 +109,9 @@ export function candidateFindings(events: unknown[]): Finding[] {
 			kind: "gotcha",
 			text: `${operation} 失败过 ${entry.count} 次（${[...entry.codes].join("、")}），重试前先读一遍错误再动手`,
 			source: `events:${operation}`,
+			// What the lesson is about: the command. Not how many times, which only
+			// grows and would make the same lesson look new on every round.
+			key: `gotcha:${operation}`,
 		});
 	}
 	return out;
@@ -144,7 +161,8 @@ export async function keepFindings(
 		proposals.push({
 			kind: "convention",
 			text: note,
-			source: options.since ? `since:${options.since}` : "caller:note",
+			source: "caller:note",
+			key: `convention:${note}`,
 		});
 	}
 	if (!proposals.length)
@@ -163,28 +181,37 @@ export async function keepFindings(
 	// just the text — every round re-added everything it had already kept.
 	// The kind and the source comment are stripped before comparing, so the same
 	// lesson is the same lesson whatever section it was filed under.
+	// The identity is the key that was written into the line's comment, not the
+	// sentence: a failure count in the sentence grows, and comparing sentences made
+	// each round append the same lesson again. A line written before keys existed
+	// falls back to its text, which is what the old file holds.
 	const seen = new Set(
 		existing
 			.split("\n")
 			.filter((line) => line.startsWith("- "))
-			.map((line) =>
-				normalise(
+			.map((line) => {
+				// The key sits after the source inside the comment, not at its start,
+				// so anchoring it to `<!--` matched nothing and every round re-added
+				// everything.
+				const key = /key:([^>]*?)\s*-->/.exec(line)?.[1];
+				if (key) return normalise(key);
+				return normalise(
 					line
 						.slice(2)
 						.replace(/^\[[a-z]+\]\s*/, "")
 						.replace(/<!--.*?-->/g, ""),
-				),
-			),
+				);
+			}),
 	);
 	const fresh: Finding[] = [];
 	const duplicates: string[] = [];
 	for (const finding of proposals) {
-		const key = normalise(finding.text);
-		if (seen.has(key)) {
+		const identity = normalise(finding.key);
+		if (seen.has(identity)) {
 			duplicates.push(finding.text);
 			continue;
 		}
-		seen.add(key);
+		seen.add(identity);
 		fresh.push(finding);
 	}
 	const batch = createHash("sha256")
@@ -197,7 +224,7 @@ export async function keepFindings(
 		"",
 		`## ${date} · ${batch}`,
 		"",
-		...fresh.map((finding) => `- [${finding.kind}] ${finding.text}  <!-- ${finding.source} -->`),
+		...fresh.map((finding) => `- [${finding.kind}] ${finding.text}  <!-- ${finding.source} · key:${finding.key} -->`),
 	];
 	const base = existing.trimEnd();
 	const header = base ? "" : "# 学到的东西\n\n每条都带着它是从哪来的。不同意就删掉，工具不会再加回来。\n";

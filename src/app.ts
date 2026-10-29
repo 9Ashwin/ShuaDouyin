@@ -179,29 +179,45 @@ export class App {
 					}
 				}
 				if (isWrite(operation)) {
-					const result = await write(operation, input, active, {
-						store: this.store,
-						chrome: this.chrome,
-						timeout: this.timeout,
-						progress: this.options.progress ?? quiet,
-					});
-					// A confirmed comment is the only moment the ledger stops being
-					// advisory. Counting the use here rather than asking the caller to
-					// run `comment phrases --use` is what makes the count complete:
-					// a caller that forgets is the failure mode the ledger exists for.
-					// A ledger that cannot be updated must not turn a delivered comment
-					// into a failure, so this reports its own trouble instead.
-					if (
-						(operation === "comment.post" || operation === "comment.reply") &&
-						input.text &&
-						result &&
-						typeof result === "object"
-					)
-						return {
-							...result,
-							phrase: await recordPhraseUse(new Knowledge(this.store.base), input.text).catch(() => null),
-						};
-					return result;
+					// A failed send used to leave no trace: only the read path recorded
+					// failures, so `diagnostics` and the repeated-failure rule in
+					// `learn keep` could never see that sending kept breaking. The
+					// receipt already holds the delivery state; this is what makes the
+					// failure visible to the parts that look for patterns across rounds.
+					const writeStarted = performance.now();
+					try {
+						const result = await write(operation, input, active, {
+							store: this.store,
+							chrome: this.chrome,
+							timeout: this.timeout,
+							progress: this.options.progress ?? quiet,
+						});
+						// A confirmed comment is the only moment the ledger stops being
+						// advisory. Counting the use here rather than asking the caller to
+						// run `comment phrases --use` is what makes the count complete:
+						// a caller that forgets is the failure mode the ledger exists for.
+						// A ledger that cannot be updated must not turn a delivered comment
+						// into a failure, so this reports its own trouble instead.
+						if (
+							(operation === "comment.post" || operation === "comment.reply") &&
+							input.text &&
+							result &&
+							typeof result === "object"
+						)
+							return {
+								...result,
+								phrase: await recordPhraseUse(new Knowledge(this.store.base), input.text).catch(() => null),
+							};
+						return result;
+					} catch (error) {
+						// Cancellation is the caller's choice and delivery_uncertain is
+						// already durable in its receipt; neither is a finding about the
+						// command. Anything else is recorded the same way a read failure is.
+						const problem = normalizeError(error);
+						if (!["cancelled", "timeout", "delivery_uncertain", "decision_uncertain"].includes(problem.code))
+							await this.store.appendFailure(operation, problem, performance.now() - writeStarted);
+						throw error;
+					}
 				}
 				const started = performance.now();
 				// A live command reads a tab on the live site; the works tab reports a
@@ -313,6 +329,48 @@ export class App {
 			case "browser.stop":
 				await this.chrome.stop(signal);
 				return { stopped: true };
+			case "comment.phrases": {
+				const known = new Knowledge(this.store.base);
+				if (!input.text) {
+					const memories = (await known.execute("memory.list", { limit: 1000 })) as Memory[];
+					// What was actually written is the check the ledger cannot make:
+					// different phrases can still add up to one formula.
+					const events = await this.store.events();
+					const written = events
+						.filter((event) => event.operation === "comment.post" || event.operation === "comment.reply")
+						.map((event) => ({
+							text:
+								typeof (event.data as { text?: unknown })?.text === "string"
+									? ((event.data as { text: string }).text ?? "")
+									: "",
+							at: event.at,
+						}))
+						.filter((comment) => comment.text)
+						.slice(-20);
+					return { ...(phraseReport(memories) as object), sameness: samenessReport(written) };
+				}
+				// Recording a use is a local write: it changes what the ledger will
+				// offer next, and saying so is what keeps a phrase from becoming a tic.
+				const memories = (await known.execute("memory.list", { limit: 1000 })) as Memory[];
+				const found = phraseMemories(memories).find((phrase) => phrase.text === input.text);
+				if (!found) throw new CliError("not_found", "No learned phrase matches that text");
+				const updated = usePhrase(found, new Date());
+				const target = memories.find(
+					(memory) => memory.tags?.includes("phrase-ledger") && memory.body.includes(`「${found.text}」`),
+				);
+				if (!target) throw new CliError("state_corrupt", "The phrase ledger entry is missing");
+				await known.execute("memory.update", {
+					resource: target.id,
+					text: phraseMemoryText(updated),
+					source: `phrase:${found.from_video}`,
+					if_match: target.revision,
+					layer: "experience",
+					memory_type: "insight",
+					topic: "可用句式",
+					tags: "phrase-ledger,comment-style",
+				});
+				return { recorded: true, phrase: updated };
+			}
 			case "history.list": {
 				const events = (await this.store.events()).filter(
 					(event) =>
@@ -466,48 +524,6 @@ export class App {
 				});
 			case "comment.list":
 				return listComments(session, input, signal);
-			case "comment.phrases": {
-				const known = new Knowledge(this.store.base);
-				if (!input.text) {
-					const memories = (await known.execute("memory.list", {})) as Memory[];
-					// What was actually written is the check the ledger cannot make:
-					// different phrases can still add up to one formula.
-					const events = await this.store.events();
-					const written = events
-						.filter((event) => event.operation === "comment.post" || event.operation === "comment.reply")
-						.map((event) => ({
-							text:
-								typeof (event.data as { text?: unknown })?.text === "string"
-									? ((event.data as { text: string }).text ?? "")
-									: "",
-							at: event.at,
-						}))
-						.filter((comment) => comment.text)
-						.slice(-20);
-					return { ...(phraseReport(memories) as object), sameness: samenessReport(written) };
-				}
-				// Recording a use is a local write: it changes what the ledger will
-				// offer next, and saying so is what keeps a phrase from becoming a tic.
-				const memories = (await known.execute("memory.list", {})) as Memory[];
-				const found = phraseMemories(memories).find((phrase) => phrase.text === input.text);
-				if (!found) throw new CliError("not_found", "No learned phrase matches that text");
-				const updated = usePhrase(found, new Date());
-				const target = memories.find(
-					(memory) => memory.tags?.includes("phrase-ledger") && memory.body.includes(`「${found.text}」`),
-				);
-				if (!target) throw new CliError("state_corrupt", "The phrase ledger entry is missing");
-				await known.execute("memory.update", {
-					resource: target.id,
-					text: phraseMemoryText(updated),
-					source: `phrase:${found.from_video}`,
-					if_match: target.revision,
-					layer: "experience",
-					memory_type: "insight",
-					topic: "可用句式",
-					tags: "phrase-ledger,comment-style",
-				});
-				return { recorded: true, phrase: updated };
-			}
 			case "comment.voice": {
 				// No browse target means the caller is asking what has been learned,
 				// which needs no page at all.
@@ -517,7 +533,7 @@ export class App {
 				// it the current work is measured.
 				if (input.known) {
 					const known = new Knowledge(this.store.base);
-					const memories = (await known.execute("memory.list", {})) as Memory[];
+					const memories = (await known.execute("memory.list", { limit: 1000 })) as Memory[];
 					return knownVoices(memories);
 				}
 				const measured = (await commentVoice(session, input, signal)) as {
@@ -547,7 +563,9 @@ export class App {
 				// fresh and be offered as if new, which is the repetition this ledger
 				// exists to prevent.
 				const existing = new Set(
-					phraseMemories((await known.execute("memory.list", {})) as Memory[]).map((phrase) => phrase.text),
+					phraseMemories((await known.execute("memory.list", { limit: 1000 })) as Memory[]).map(
+						(phrase) => phrase.text,
+					),
 				);
 				const learned: string[] = [];
 				for (const candidate of (measured as { candidates?: Phrase[] }).candidates ?? []) {

@@ -43,7 +43,7 @@ const MARKER = "phrase-ledger";
 // another chance.
 const SPENT_AT = 3;
 // Long enough that a reader will not connect the two uses.
-const COOLDOWN_DAYS = 14;
+export const COOLDOWN_DAYS = 14;
 
 export function phraseMemoryText(phrase: Phrase): string {
 	return [
