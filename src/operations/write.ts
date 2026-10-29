@@ -644,7 +644,14 @@ async function settleForward(
 		});
 		if (outcome.blocked && !outcome.dispatched)
 			return { confirmed: false, blocked: true, dispatched: false, result: undefined };
-		if (outcome.uncertain) return { confirmed: false, dispatched: true, result: undefined };
+		// An uncertain first read is not a verdict: the button relabels a moment
+		// after the click, and giving up on the first look reported every share as
+		// uncertain even when it landed. Keep reading until the window closes.
+		if (outcome.uncertain) {
+			previous = undefined;
+			await delay(250);
+			continue;
+		}
 		const signature = JSON.stringify(outcome);
 		if (outcome.confirmed && signature === previous)
 			return { confirmed: true, dispatched: true, result: outcome.record };

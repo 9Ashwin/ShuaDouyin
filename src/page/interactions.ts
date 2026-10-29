@@ -314,9 +314,17 @@ function matchesRequestedText(editor: HTMLElement, args: Args): boolean {
 	if (editor.querySelector('img,video,audio,[data-slate-void="true"]')) return false;
 	const text = editorText(editor);
 	if (text === args.text) return true;
-	if (args.action !== "chat.send" || typeof args.text !== "string") return false;
+	// A zero-width character the caller did not type is not the same message, even
+	// though it renders identically — the browser tests reject exactly that. What
+	// is accepted is the page's own sentinel, which is marked as structure rather
+	// than being free text, and only the branch below may strip it.
+	if (typeof args.text !== "string") return false;
 	// The editor renders each line as a block ending in a marked zero-width
 	// sentinel. Remove only that exact structural node, never a user character.
+	// Both the private-message composer and the comment composer are the same
+	// Draft.js editor, and restricting this to chat.send is why a comment reply
+	// failed with "filled text differs from requested text" while the composer
+	// visibly held exactly the right sentence.
 	const blocks = [...editor.childNodes];
 	if (!blocks.length || blocks.some((node) => !(node instanceof HTMLElement) || node.tagName !== "DIV")) return false;
 	const lines: string[] = [];

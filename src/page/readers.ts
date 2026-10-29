@@ -403,18 +403,75 @@ export interface Contact {
 // not pick one row's identity for all of them. The open conversation's header
 // holds the same record under `curConversation` instead of `conversation`.
 function fiberConversationID(element: HTMLElement): string | null {
+	const conversation = fiberConversation(element);
+	const id = scalarID(inherited(conversation, "id"));
+	return id && /^\d{1,64}$/.test(id) ? `native:${id}` : null;
+}
+
+// The conversation record itself, which is where both the identity and the kind
+// live. props.conversation is undefined on the row element: the record is one to
+// six fiber levels up, under either name.
+function fiberConversation(element: HTMLElement): unknown {
 	const key = Object.getOwnPropertyNames(element).find((name) => name.startsWith("__reactFiber$"));
-	const found = new Set<string>();
+	// The same record is reachable from several fiber levels, so it is collected by
+	// identity rather than by count: counting occurrences found the same object
+	// twice and reported the row as ambiguous.
+	const found = new Set<object>();
 	let fiber = key ? own(element, key) : undefined;
 	for (let depth = 0; depth < 6 && fiber; depth++, fiber = own(fiber, "return")) {
 		const props = own(fiber, "memoizedProps");
 		for (const name of ["conversation", "curConversation"]) {
 			const conversation = own(props, name);
+			// A direct chat's record id is "0:1:105358793304:1543352384762973", not a
+			// bare number, so requiring digits here found no record for a direct chat
+			// at all — and its type stayed unknown while both groups read correctly.
 			const id = scalarID(inherited(conversation, "id"));
-			if (id && /^\d{1,64}$/.test(id)) found.add(id);
+			if (id && typeof conversation === "object" && conversation) found.add(conversation);
 		}
 	}
-	return found.size === 1 ? `native:${[...found][0]}` : null;
+	return found.size === 1 ? [...found][0] : undefined;
+}
+
+// What kind of conversation this is. The row carries no type attribute and the
+// record's fields sit on its prototype, so the kind is read off the record
+// itself: bizType is 1 for a direct chat and 2 for a group, and participantCount
+// agrees. Without this both groups read back as "unknown", which a caller cannot
+// tell apart from a direct chat.
+function conversationType(element: HTMLElement): string {
+	const conversation = fiberConversation(element);
+	if (!conversation) return "unknown";
+	const biz = fieldValue(conversation, "bizType");
+	const participants = fieldValue(conversation, "participantCount");
+	if (Number(biz) === 2) return "group";
+	// A record that reports more than two participants is a group whatever its
+	// bizType says; a missing count is not evidence of a direct chat.
+	if (typeof participants === "number" && participants > 2) return "group";
+	if (Number(biz) === 1) return "direct";
+	return "unknown";
+}
+
+// A conversation record keeps most fields on its prototype, and some of them are
+// accessors rather than data. `inherited` deliberately stops at an accessor so it
+// never runs page code; this asks for one field by name, which is the opt-in that
+// rule is for.
+function fieldValue(object: unknown, key: string): unknown {
+	let node: object | null = object && typeof object === "object" ? object : null;
+	for (let depth = 0; node && depth < 6; depth++) {
+		const descriptor = Object.getOwnPropertyDescriptor(node, key);
+		if (descriptor) {
+			if ("value" in descriptor) return descriptor.value;
+			if (typeof descriptor.get === "function") {
+				try {
+					return descriptor.get.call(object);
+				} catch {
+					return undefined;
+				}
+			}
+			return undefined;
+		}
+		node = Object.getPrototypeOf(node) as object | null;
+	}
+	return undefined;
 }
 
 // A delivered row carries its platform id only on the message object behind
@@ -532,7 +589,7 @@ export function readContacts(): Contact[] {
 	return find(document, '[data-e2e="im-dialog"] [data-e2e="conversation-item"]').map((row) => ({
 		id: identity(row),
 		name: clean(row.querySelector('[data-e2e="conversation-name"],.conversationConversationItemtitle')?.textContent),
-		type: row.getAttribute("data-conversation-type") ?? "unknown",
+		type: row.getAttribute("data-conversation-type") ?? conversationType(row),
 		unread: !!row.querySelector('[class*="unread"],[class*="Unread"],[data-e2e="unread-count"]'),
 	}));
 }
@@ -850,7 +907,8 @@ export function readChat(expected?: string) {
 				'[data-e2e="chat-title"],[data-e2e="group-chat-title"],[class*="StackLayoutStackChatHeadertitle"]',
 			)?.textContent,
 		),
-		type: header.getAttribute("data-conversation-type") ?? "unknown",
+		// The header carries no type attribute either; the record behind it does.
+		type: header.getAttribute("data-conversation-type") ?? conversationType(header),
 		messages,
 		scope: "loaded_dom",
 		complete: false,

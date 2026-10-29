@@ -261,6 +261,14 @@ interface ForwardState {
 	/** The label the page showed on this row's action button. */
 	sendLabel: string;
 	dispatched: boolean;
+	/**
+	 * What the button said before the click, and what the page set it to after.
+	 * A share that landed turns 分享 into 捎句话 and the button greys out; that
+	 * change is the page's own statement that it took the action, and it is a
+	 * better witness than the panel closing, which also happens on a cancel.
+	 */
+	label_before?: string;
+	label_after?: string;
 }
 declare global {
 	interface Window {
@@ -269,10 +277,15 @@ declare global {
 }
 
 function setForwardState(state: Omit<ForwardState, "dispatched" | "label">): void {
-	const row = find(document, PANEL)
-		.find((element) => visible(element))
-		?.querySelector(`[data-userid="${state.userid}"]`)?.parentElement;
-	window.__douyinCLIForward = { ...state, label: clean(row?.innerText ?? ""), dispatched: false };
+	const panel = find(document, PANEL).find((element) => visible(element));
+	const button = panel?.querySelector(`[data-userid="${state.userid}"]`);
+	const row = button?.parentElement;
+	window.__douyinCLIForward = {
+		...state,
+		label: clean(row?.innerText ?? ""),
+		dispatched: false,
+		label_before: clean(button?.textContent ?? ""),
+	};
 	// The witness is bound at the document level and re-reads the clicked row's
 	// identity, so a React re-render that replaces the button node does not
 	// lose the evidence. Only a trusted click counts.
@@ -286,7 +299,22 @@ function setForwardState(state: Omit<ForwardState, "dispatched" | "label">): voi
 				(node): node is HTMLElement => node instanceof HTMLElement && node.hasAttribute("data-userid"),
 			);
 			// A click on a different row is not this operation's dispatch.
-			if (clicked?.getAttribute("data-userid") === current.userid) current.dispatched = true;
+			if (clicked?.getAttribute("data-userid") !== current.userid) return;
+			current.dispatched = true;
+			// The page relabels the button when it accepts the share, but not on the
+			// next frame — it happens after its own async handler, and the panel can
+			// close before a single late read lands. So the label is sampled a few
+			// times over the first second and the first non-empty change is kept.
+			const sample = (attempt: number) => {
+				if (current.label_after && current.label_after !== current.label_before) return;
+				const live = find(document, PANEL)
+					.find((element) => visible(element))
+					?.querySelector(`[data-userid="${current.userid}"]`);
+				const text = clean(live?.textContent ?? "");
+				if (text) current.label_after = text;
+				if (attempt < 6) setTimeout(() => sample(attempt + 1), 120 * (attempt + 1));
+			};
+			setTimeout(() => sample(0), 60);
 		},
 		{ capture: true },
 	);
@@ -324,18 +352,34 @@ export function forwardResult(args: { token: string; recipient_id?: string; vide
 	if (!state || state.token !== args.token) return { confirmed: false, dispatched: true, uncertain: true };
 	if (state.dispatched !== true) return { confirmed: false, blocked: true };
 	const panelOpen = readForwardPanel().some((row) => row.userid === state.userid);
-	// The button label is reported as observed. 分享 and 捎句话 are both share
-	// actions; which one the page shows is not evidence of a friend relation.
+	// The page gives two signs that it took the share, and only one of them is
+	// the panel closing — which also happens when the caller cancels. The other is
+	// the button itself: 分享 turns into 捎句话 and greys out once the work has been
+	// sent to that person. That relabel is the page stating the outcome, so it
+	// confirms the send instead of leaving every share uncertain.
+	// Read the row as it is now rather than trusting the frame captured at click
+	// time: the page relabels after its own handler, which is later than the next
+	// animation frame. The live read is what said 捎句话 while the captured one
+	// still said 分享.
+	const liveLabel = clean(
+		find(document, PANEL)
+			.find((element) => visible(element))
+			?.querySelector(`[data-userid="${state.userid}"]`)?.textContent ?? "",
+	);
+	const after = liveLabel || state.label_after || "";
+	const relabelled = !!after && after !== state.label_before;
 	return {
-		confirmed: false,
+		confirmed: relabelled,
 		dispatched: true,
-		uncertain: !panelOpen,
+		uncertain: !relabelled && !panelOpen,
 		record: {
 			recipient_id: state.userid,
 			video_id: state.videoID,
 			panel_closed: !panelOpen,
 			row: state.label,
 			send_label: state.sendLabel,
+			label_before: state.label_before ?? null,
+			label_after: after || null,
 		},
 	};
 }
