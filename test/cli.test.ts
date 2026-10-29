@@ -125,6 +125,30 @@ test("the commands the installer verifies still exist", async (t) => {
 	assert.match(JSON.parse(guide.stdout).data.markdown as string, /growth/);
 });
 
+test("progress stays on stderr and never contaminates the envelope", async (t) => {
+	// A caller parses stdout. If a progress line landed there the envelope would
+	// stop being one JSON object, which is the contract the whole CLI rests on.
+	const directory = await mkdtemp(join(tmpdir(), "dy-progress-"));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const result = await invoke([
+		"--state-dir",
+		directory,
+		"--progress",
+		"--dry-run",
+		"comment",
+		"post",
+		"--video-id",
+		"1",
+		"--text",
+		"x",
+	]);
+	assert.equal(result.exit, 0);
+	assert.equal(result.stderr, "", "dry run touches no page, so it has no steps to report");
+	const envelope = JSON.parse(result.stdout);
+	assert.equal(envelope.ok, true);
+	assert.equal(envelope.dry_run, true);
+});
+
 test("dry run preserves text and does not create state or start Chrome", async (t) => {
 	const directory = await mkdtemp(join(tmpdir(), "dy-cli-"));
 	t.after(() => rm(directory, { recursive: true, force: true }));

@@ -1482,6 +1482,10 @@ export const GLOBAL_FLAGS = [
 	{ name: "--timeout <seconds>", description: "Per-command timeout in seconds", default: 45 },
 	{ name: "--request-id <id>", description: "Idempotency key for sends and comments" },
 	{ name: "--dry-run", description: "Validate input and show the plan without side effects" },
+	{
+		name: "--progress",
+		description: "Emit one JSON progress line per step to stderr while a write runs",
+	},
 ];
 
 export function schema(id?: string) {

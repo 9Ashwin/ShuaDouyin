@@ -39,6 +39,7 @@ import { sourceCheckout } from "./operations/source.ts";
 import { type Input, isWrite, validate } from "./operations/validate.ts";
 import { transcribeVoices } from "./operations/voice.ts";
 import { write } from "./operations/write.ts";
+import { quiet, type Reproduce } from "./progress.ts";
 import { type BrowserConfig, Store } from "./store.ts";
 
 export type { Input } from "./operations/validate.ts";
@@ -69,6 +70,9 @@ export interface AppOptions {
 	profile?: string;
 	chrome?: string;
 	timeout?: number;
+	// Called as a write moves through its steps. Defaults to doing nothing so
+	// every caller that does not ask for it stays silent.
+	progress?: Reproduce;
 }
 
 // The App owns bot/account resolution and locking. Every operation body lives
@@ -162,6 +166,7 @@ export class App {
 						store: this.store,
 						chrome: this.chrome,
 						timeout: this.timeout,
+						progress: this.options.progress ?? quiet,
 					});
 				const started = performance.now();
 				// A live command reads a tab on the live site; the works tab reports a

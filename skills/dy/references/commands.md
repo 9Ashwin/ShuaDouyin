@@ -262,6 +262,30 @@ dy source                # 真正在跑这份 dy 的源码目录
 
 先读 `self-improvement.md`。
 
+## 看写操作进行到哪了
+
+发评论、发私信这些写入要几秒。默认它们安静到最后才返回一条结果，调用方分不清「在发」和「卡住」。加 `--progress` 让每一步走到 stderr：
+
+```bash
+dy --progress --request-id <id> chat send --conversation-id <id> --text "…"
+```
+
+stderr 每行一条：
+
+```json
+{"progress":{"step":"connecting","at":"…","elapsed_ms":0}}
+{"progress":{"step":"selecting_conversation","elapsed_ms":108}}
+{"progress":{"step":"dispatching","elapsed_ms":200,"detail":{"request_id":"…"}}}
+{"progress":{"step":"confirming","elapsed_ms":268}}
+{"progress":{"step":"confirmed","elapsed_ms":1187}}
+```
+
+**`dispatching` 是分水岭。** 它之前失败，什么都没发出去（收据写 `not_sent`）；它之后就是不可逆的，之后的任何失败都是 `delivery_uncertain`，**不能重发**。
+
+stdout 仍然只有一个 `{ok:...}` 信封——进度不会混进去。`--dry-run` 不产生进度行，因为它不碰页面。
+
+**典型耗时：**私信约 1–2 秒（其中确认占大头），评论约 2–4 秒（多一步打开评论区）。时间基本花在等页面确认上，压不掉——那正是「确认发出去了」的证据。
+
 ## 让 agent 学会用
 
 ```bash

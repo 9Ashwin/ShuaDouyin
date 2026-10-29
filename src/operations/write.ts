@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { ChromeManager, Point, Session } from "../browser.ts";
 import { CliError } from "../errors.ts";
+import { quiet, type Reproduce } from "../progress.ts";
 import type { Receipt, Store } from "../store.ts";
 import { openComments } from "./comments.ts";
 import { control, openSharePanel, selectChat } from "./navigation.ts";
@@ -34,9 +35,10 @@ export async function write(
 	operation: string,
 	input: Input,
 	signal: AbortSignal,
-	deps: { store: Store; chrome: ChromeManager; timeout: number },
+	deps: { store: Store; chrome: ChromeManager; timeout: number; progress?: Reproduce },
 ): Promise<unknown> {
 	const { store, chrome, timeout } = deps;
+	const step = deps.progress ?? quiet;
 	const action =
 		operation === "comment.reply"
 			? "comment.post"
@@ -75,6 +77,7 @@ export async function write(
 			return { request_id: key, confirmed: true, replayed: true, result: existing.result };
 		if (existing.status !== "not_sent") throw uncertain(key, existing);
 	}
+	step("connecting", { operation });
 	const session = await chrome.connect(signal, timeout);
 	const args = { ...payload, token: randomUUID() };
 	let receipt: Receipt | undefined;
@@ -99,7 +102,10 @@ export async function write(
 				throw new CliError("identity_mismatch", "Current work does not match the requested video ID");
 			await openSharePanel(session);
 		}
-		if (action === "chat.send") await selectChat(session, input.conversation_id ?? "", signal);
+		if (action === "chat.send") {
+			step("selecting_conversation", { conversation_id: input.conversation_id ?? null });
+			await selectChat(session, input.conversation_id ?? "", signal);
+		}
 		if (operation === "chat.reply") {
 			// The quote state lives in the page, not in the text: the row's own reply
 			// control is what makes the platform render 回复消息, and it must be set
@@ -126,6 +132,7 @@ export async function write(
 			const state = await session.call<{ video?: { author_id?: string | null } | null }>("video.info", {});
 			workAuthorID = state.video?.author_id ?? null;
 			authorID = workAuthorID;
+			step("opening_comments", { video_id: input.video_id ?? null });
 			await openComments(session, input, signal);
 			// The composer may already be in this comment's reply state, in which
 			// case its reply control has become 回复中 and is no longer clickable.
@@ -243,6 +250,10 @@ export async function write(
 		receipt.updated_at = new Date().toISOString();
 		await store.saveReceipt(receipt);
 		mayHaveDispatched = true;
+		// A caller watching this line knows the point of no return has passed:
+		// everything before it could still fail without sending anything, and
+		// everything after it is confirmation.
+		step("dispatching", { request_id: key });
 		// The sticker was already dispatched by the click that chose it, so
 		// clicking anything else here would send a second message.
 		if (!stickerOnly) await session.click(point);
@@ -253,6 +264,7 @@ export async function write(
 			await delay(700, undefined, { signal });
 			await expandReplies(session, input.video_id ?? "", input.comment_id, signal);
 		}
+		step("confirming", { request_id: key });
 		const confirmed =
 			operation === "chat.forward"
 				? await settleForward(session, {
@@ -313,6 +325,7 @@ export async function write(
 			...(input.goal ? { goal: input.goal } : {}),
 			result: confirmed.result,
 		});
+		step("confirmed", { request_id: key });
 		return { request_id: key, confirmed: true, changed: true, result: confirmed.result };
 	} catch (error) {
 		if (receipt && !mayHaveDispatched) {

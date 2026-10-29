@@ -3,6 +3,7 @@ import { Command, CommanderError, InvalidArgumentError, Option } from "commander
 import { App, type AppOptions, type Input } from "./app.ts";
 import { COMMANDS, type CommandSpec, GLOBAL_FLAGS, GROUPS, schema } from "./catalog.ts";
 import { CliError, errorData, errorExit, normalizeError } from "./errors.ts";
+import { progressTo } from "./progress.ts";
 import { runTui } from "./tui.ts";
 
 export interface Streams {
@@ -18,6 +19,7 @@ interface Globals {
 	timeout: number;
 	requestId?: string;
 	dryRun?: boolean;
+	progress?: boolean;
 }
 
 function number(value: string): number {
@@ -116,8 +118,15 @@ export function createProgram(io: Streams, parentSignal?: AbortSignal, version =
 				...(parentSignal ? [parentSignal] : []),
 				AbortSignal.timeout(appOptions.timeout ?? 45000),
 			]);
+			// Progress goes to stderr so stdout keeps exactly one envelope. It is
+			// opt-in: a pipeline that parses stdout should not have to filter lines
+			// out of it, and a caller that wants to show "posting…" needs to see the
+			// steps while they happen rather than after they finish.
+			const app = new App(
+				globals.progress ? { ...appOptions, progress: progressTo((line) => io.stderr.write(line)) } : appOptions,
+			);
 			try {
-				output(await new App(appOptions).execute(spec.id, input, signal), globals);
+				output(await app.execute(spec.id, input, signal), globals);
 			} catch (error) {
 				if (
 					signal.aborted &&
