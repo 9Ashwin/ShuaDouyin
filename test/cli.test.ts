@@ -83,7 +83,10 @@ test("every command is named somewhere an agent can read", async (t) => {
 	const result = await invoke(["--state-dir", directory, "guide"]);
 	const guide = (JSON.parse(result.stdout).data.markdown as string).replace(/\s+/g, " ");
 	const paths = ["skill", "onboarding", "growth", "workspace", "memory", "browse", "context", "report", "bot"];
-	const missing = COMMANDS.filter((command) => !guide.includes(command.id.split(".").join(" ")));
+	// A single-word command like `update` matched any prose containing the word,
+	// so `dy update` shipped undocumented while this test stayed green. A named
+	// command is one that appears as `dy <id>`, which is how it is invoked.
+	const missing = COMMANDS.filter((command) => !guide.includes(`dy ${command.id.split(".").join(" ")}`));
 	assert.deepEqual(
 		missing.map((command) => command.id),
 		[],

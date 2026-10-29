@@ -318,6 +318,7 @@ dy memory reindex            # 重建索引（Markdown 是唯一真源）
 dy memory ingest             # 手工改过文件后同步
 dy memory compact            # 合并正文完全相同、多余的重复条目
 dy memory candidates / decide / decision-status
+dy memory decision-status --request-id <id>   # 中断后查决策收据
 ```
 
 写记忆的取舍见 `memory-and-persona.md`。
@@ -385,6 +386,8 @@ dy diagnostics           # 反复失败的命令、变慢的命令
 dy diagnostics-ack <command> [--error-code …]
 dy page facts            # 页面真实标记 vs 代码认识的标记
 dy source                # 真正在跑这份 dy 的源码目录
+dy update                # 怎么装的、是哪一版、要不要更新
+dy update --check        # 问 GitHub 有没有更新的提交
 ```
 
 先读 `self-improvement.md`。

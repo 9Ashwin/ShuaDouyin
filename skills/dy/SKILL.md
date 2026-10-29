@@ -34,6 +34,30 @@ npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
 dy skill install
 ```
 
+### 更新 dy
+
+```bash
+dy update --check
+```
+
+告诉你三件事：这份是怎么装的（`checkout` / `npm-global` / `npm-local` / `managed-release`）、是哪个 commit 构建的、有没有更新的。
+
+**版本号永远是 0.1.0，别用它判断新旧。** 用 commit。
+
+按 `update` 字段给的命令更新。通常是：
+
+```bash
+npm install -g github:9Ashwin/ShuaDouyin@latest
+```
+
+**已经装过的话，不加 `@latest` 或 `--force` 会显示 up to date 而不更新**——npm 记录的是 commit，不是分支，它认为已经满足要求了。
+
+更新完 skill 也要重装一次，否则 agent 读到的是旧说明：
+
+```bash
+npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
+```
+
 ## 快速开始
 
 ```bash

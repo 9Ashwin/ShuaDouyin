@@ -175,6 +175,21 @@ export const COMMANDS: CommandSpec[] = [
 		guidance:
 			"Any agent using dy can improve it from wherever it is running. The reported path is the real working tree behind this executable, so a fix made there reaches the next dy run after a build. Prefer the reported branch and HEAD; do not assume the caller's project is the source.",
 	},
+	{
+		id: "update",
+		description: "Report how this dy was installed, what commit it is, and whether a newer one exists",
+		flags: [
+			{
+				key: "force",
+				name: "--check",
+				description: "Ask GitHub for the newest commit instead of reporting only what is local",
+				type: "boolean",
+			},
+		],
+		effect: "read",
+		guidance:
+			"The version number does not change between pushes, so it cannot say whether a copy is current. The commit it was built from can. --check compares that with the repository's main; without it this reports only what the local copy knows and works offline. The update command is the one that matches how this copy was installed.",
+	},
 	{ id: "skill.status", description: "Compare the bundled skill with the copies installed for agents", effect: "read" },
 	{
 		id: "skill.install",

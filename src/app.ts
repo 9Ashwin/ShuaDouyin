@@ -47,6 +47,7 @@ import { userRelations } from "./operations/relations.ts";
 import { skillInstall, skillStatus } from "./operations/skill.ts";
 import { checkGoalQuota, pauseState } from "./operations/social.ts";
 import { sourceCheckout } from "./operations/source.ts";
+import { installShape, latestCommit } from "./operations/update.ts";
 import { type Input, isWrite, validate } from "./operations/validate.ts";
 import { transcribeVoices } from "./operations/voice.ts";
 import { voiceMemoryText } from "./operations/voice-memory.ts";
@@ -275,6 +276,17 @@ export class App {
 			}
 			case "source":
 				return sourceCheckout();
+			case "update": {
+				const shape = installShape();
+				if (!input.force) return { ...shape, latest: null, behind: null, note: null };
+				const remote = await latestCommit();
+				return {
+					...shape,
+					latest: remote.head,
+					behind: shape.head && remote.head ? shape.head !== remote.head : null,
+					note: remote.error,
+				};
+			}
 			case "link.resolve":
 				return resolveLink(input.resource ?? "", signal);
 			case "browser.config":
