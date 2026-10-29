@@ -38,6 +38,11 @@ export function prepareChatImage(conversation: string, token: string, name: stri
 		fail("draft_conflict", "Conversation already contains an image draft");
 	window.__dyImageGuard?.cleanup();
 	input.setAttribute("data-dy-image-input", token);
+	// The flags live on the input as well as in memory. React rebuilds this panel
+	// after an upload and `window.__dyImageGuard` goes with it, so a read taken
+	// after the page re-rendered found no witness and reported identity_mismatch
+	// on a send that had worked. An attribute survives the rebuild.
+	const mark = (name: string, value: boolean) => input.setAttribute(`data-dy-image-${name}`, value ? "1" : "0");
 	const state: NonNullable<Window["__dyImageGuard"]> = {
 		token,
 		accepted: false,
@@ -73,6 +78,7 @@ export function prepareChatImage(conversation: string, token: string, name: stri
 		const files = input.files;
 		if (!files || files.length !== 1 || files[0].name !== name || files[0].size !== size || files[0].type !== mime) {
 			state.interfered = true;
+			mark("interfered", true);
 			return;
 		}
 		try {
@@ -94,8 +100,10 @@ export function prepareChatImage(conversation: string, token: string, name: stri
 			)
 				fail("draft_conflict", "Conversation draft changed before upload");
 			state.accepted = true;
+			mark("accepted", true);
 		} catch {
 			state.blocked = true;
+			mark("blocked", true);
 			event.preventDefault();
 			event.stopImmediatePropagation();
 		}
@@ -110,6 +118,7 @@ export function prepareChatImage(conversation: string, token: string, name: stri
 					!!state.confirmationEditor?.contains(event.target)))
 		) {
 			state.interfered = true;
+			mark("interfered", true);
 		}
 	};
 	for (const type of ["input", "change"]) document.addEventListener(type, listener, true);
@@ -125,6 +134,7 @@ export function prepareChatImage(conversation: string, token: string, name: stri
 	window.__dyImageGuard = state;
 	state.timer = setTimeout(() => {
 		state.expired = true;
+		mark("expired", true);
 		input.removeAttribute("data-dy-image-input");
 		setTimeout(() => cleanupChatImage(token), 5000);
 	}, 12000);
@@ -141,8 +151,23 @@ export function preflightChatImage(token: string) {
 export function chatImageState(conversation: string, token: string) {
 	readChat(conversation);
 	const guard = window.__dyImageGuard;
-	if (!guard || guard.token !== token) fail("identity_mismatch", "Image upload witness changed");
-	return { accepted: guard.accepted, blocked: guard.blocked };
+	if (guard && guard.token === token) return { accepted: guard.accepted, blocked: guard.blocked };
+	// The panel is rebuilt after an upload, which drops the window witness. The
+	// input's own attributes are the same evidence and survive the rebuild, so a
+	// send that worked is not reported as an identity mismatch.
+	const marks = imageMarks(token);
+	if (!marks) fail("identity_mismatch", "Image upload witness changed");
+	return { accepted: marks.accepted, blocked: marks.blocked };
+}
+
+// The flags mirrored onto the upload input by this operation's token.
+function imageMarks(token: string): { accepted: boolean; blocked: boolean } | null {
+	const input = document.querySelector<HTMLInputElement>(`input[data-dy-image-input="${token}"]`);
+	if (!input) return null;
+	return {
+		accepted: input.getAttribute("data-dy-image-accepted") === "1",
+		blocked: input.getAttribute("data-dy-image-blocked") === "1",
+	};
 }
 
 function modalConversation(dialog: HTMLElement, expected: string) {
@@ -183,16 +208,18 @@ export async function prepareChatImageConfirmation(
 	expectedSize: number,
 	expectedSHA256: string,
 ) {
-	const uploadGuard = window.__dyImageGuard;
-	if (
-		!uploadGuard ||
-		uploadGuard.token !== token ||
-		!uploadGuard.accepted ||
-		uploadGuard.blocked ||
-		uploadGuard.expired ||
-		uploadGuard.interfered
-	)
+	// The panel is rebuilt between the upload and this step, so the window witness
+	// may be gone by now. The attributes mirrored onto the input carry the same
+	// facts and survive the rebuild; requiring the window object here is what made
+	// every image send fail after a successful upload.
+	const uploadGuard = window.__dyImageGuard?.token === token ? window.__dyImageGuard : undefined;
+	const marks = imageMarks(token);
+	if (uploadGuard) {
+		if (!uploadGuard.accepted || uploadGuard.blocked || uploadGuard.expired || uploadGuard.interfered)
+			fail("identity_mismatch", "Image upload witness is unavailable");
+	} else if (!marks?.accepted || marks.blocked) {
 		fail("identity_mismatch", "Image upload witness is unavailable");
+	}
 	const chat = readChat(conversation);
 	const dialog = one(
 		find(document, '[role="dialog"] [class*="MsgInputSendFileModalbox"]'),
@@ -224,32 +251,41 @@ export async function prepareChatImageConfirmation(
 		.map((byte) => byte.toString(16).padStart(2, "0"))
 		.join("");
 	if (digest !== expectedSHA256) fail("identity_mismatch", "Image preview does not match the selected file");
-	if (
-		window.__dyImageGuard !== uploadGuard ||
-		!uploadGuard.accepted ||
-		uploadGuard.blocked ||
-		uploadGuard.expired ||
-		uploadGuard.interfered
-	)
+	// A guard that is gone lost its listeners, so the flags are re-read instead of
+	// requiring the object itself. A guard that is present must still match.
+	if (uploadGuard) {
+		if (
+			window.__dyImageGuard !== uploadGuard ||
+			!uploadGuard.accepted ||
+			uploadGuard.blocked ||
+			uploadGuard.expired ||
+			uploadGuard.interfered
+		)
+			fail("identity_mismatch", "Image upload witness changed while verifying preview");
+	} else if (imageMarks(token)?.blocked) {
 		fail("identity_mismatch", "Image upload witness changed while verifying preview");
+	}
+	// The confirm button reads 发送（1） when one file is selected — the page counts
+	// the attachments into the label. Requiring exactly "发送" matched nothing and
+	// the send step failed with "image confirmation send control, found 0".
 	const button = one(
-		find<HTMLButtonElement>(dialog, 'button[class*="MsgInputSendFileModalbtnSure"]').filter(
-			(element) => clean(element.textContent) === "发送",
+		find<HTMLButtonElement>(dialog, 'button[class*="MsgInputSendFileModalbtnSure"]').filter((element) =>
+			/^发送(?:\s*[（(]\s*\d+\s*[）)])?$/.test(clean(element.textContent)),
 		),
 		"image confirmation send control",
 	);
-	uploadGuard.confirmationEditor = editor;
+	if (uploadGuard) uploadGuard.confirmationEditor = editor;
 	modalConversation(button, conversation);
 	if (uploadGuard?.token === token && uploadGuard.timer) clearTimeout(uploadGuard.timer);
 	let expired = false;
 	installGuard(button, token, () => {
+		if (expired || (uploadGuard && window.__dyImageGuard !== uploadGuard))
+			fail("identity_mismatch", "Image confirmation witness expired or changed");
+		const live = uploadGuard ?? imageMarks(token);
 		if (
-			expired ||
-			window.__dyImageGuard !== uploadGuard ||
-			uploadGuard.expired ||
-			uploadGuard.interfered ||
-			uploadGuard.blocked ||
-			!uploadGuard.accepted
+			!live ||
+			live.blocked ||
+			(uploadGuard && (uploadGuard.expired || uploadGuard.interfered || !uploadGuard.accepted))
 		)
 			fail("identity_mismatch", "Image confirmation witness expired or changed");
 		if (window.__douyinCLIGuard?.token !== token || window.__douyinCLIGuard.state.dispatched)
@@ -319,5 +355,17 @@ export function cleanupChatImage(token: string) {
 		window.__douyinCLIGuard.cleanup();
 		delete window.__douyinCLIGuard;
 	}
-	return {};
+	// A confirmation left open blocks the next attempt: prepare refuses while one
+	// exists, so one failure made every later send fail the same way. Closing it
+	// is part of cleanup, not a separate step the caller has to remember.
+	const dialog = find(document, '[role="dialog"] [class*="MsgInputSendFileModalbox"]')[0];
+	if (dialog) {
+		const cancel = [...dialog.querySelectorAll<HTMLElement>('button,[role="button"],div')].find((element) =>
+			/^取消$/.test(clean(element.textContent)),
+		);
+		// Only a dismissal the page offers is used; a synthetic click on a backdrop
+		// could land on whatever moved under it.
+		cancel?.click();
+	}
+	return { closed: !dialog };
 }

@@ -184,6 +184,14 @@ export async function sendChatImage(
 		}
 		if (mayHaveDispatched) {
 			if (error instanceof CliError && error.code === "delivery_uncertain") throw error;
+			// The stage alone does not say why: a failure before the click and one
+			// after it read the same. Recording the cause beside the stage is what
+			// makes the next investigation possible.
+			if (receipt) {
+				receipt.uncertainty_reason = error instanceof CliError ? `failed_${error.code}` : "failed_internal";
+				receipt.updated_at = new Date().toISOString();
+				await store.saveReceipt(receipt).catch(() => undefined);
+			}
 			throw uncertain(request, receipt, error);
 		}
 		throw error;
