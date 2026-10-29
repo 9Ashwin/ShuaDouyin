@@ -223,6 +223,29 @@ export function readComments(videoID: string) {
 					row.getAttribute("data-author-is-self") === "true" ||
 					owned('[data-e2e="comment-self"]').length === 1;
 				const mine = marker || !!(self && authorID === self);
+				// The comment's own like count is what tells whether anyone read it.
+				// It sits in the stats container beside 分享 and 回复, and the page
+				// gives it no data-e2e of its own — a count is the only numeric leaf
+				// there that is not a timestamp or a reply total.
+				const stats = owned('[class*="comment-item-stats"]')[0];
+				const likeText = stats
+					? clean(
+							[...stats.querySelectorAll("span,div")]
+								.filter((element) => !element.children.length)
+								.map((element) => clean(element.textContent))
+								.find((text) => /^\d[\d.]*[万wW]?$/.test(text)),
+						)
+					: "";
+				const likes = likeText
+					? /[万wW]$/.test(likeText)
+						? Math.round(Number.parseFloat(likeText) * 10_000)
+						: Number.parseInt(likeText, 10)
+					: null;
+				// "作者赞过" is the platform saying the work's author acknowledged
+				// this comment, which is stronger evidence than a like count.
+				const likedByAuthor = owned("*")
+					.filter((element) => !element.children.length)
+					.some((element) => clean(element.textContent) === "作者赞过");
 				const status = row.getAttribute("data-send-status") ?? row.getAttribute("data-comment-status") ?? "";
 				const pending =
 					/pending|sending|reviewing/.test(status) ||
@@ -240,6 +263,8 @@ export function readComments(videoID: string) {
 					images,
 					author: clean(author?.textContent),
 					author_url: author?.href ?? null,
+					likes,
+					liked_by_author: likedByAuthor,
 					mine,
 					pending,
 					failed,

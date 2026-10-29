@@ -146,3 +146,138 @@ export function voiceGuidance(profile: VoiceProfile): string[] {
 		lines.push(`${share(profile.uses_emoji)}% carry an emoji. Leaving them out entirely is a visible difference.`);
 	return lines;
 }
+
+// Which comments in a section actually landed.
+//
+// The platform shows a like count per comment and marks the ones the work's
+// author acknowledged. That is the only outcome signal the page gives, and it
+// contradicts the obvious guess: on a section where the median comment ran 22
+// characters, the most-liked one was four — "下次一起唱", acknowledged by the
+// author — while the longest, most carefully written comment had none.
+//
+// So this measures rather than advises. A caller that concludes "short works
+// here" from one section's data is drawing a conclusion the data supports only
+// for that section.
+export interface Engagement {
+	rated: number;
+	median_likes: number;
+	top: { text: string; likes: number; length: number; liked_by_author: boolean }[];
+	// Correlation between length and likes, -1..1. Near zero means length says
+	// nothing about whether people liked it, which is the common case.
+	length_likes_correlation: number;
+	acknowledged: number;
+}
+
+export function measureEngagement(
+	comments: { text?: string; likes?: number | null; liked_by_author?: boolean }[],
+): Engagement {
+	const rated = comments
+		.filter((comment) => typeof comment.likes === "number")
+		.map((comment) => ({
+			text: (comment.text ?? "").slice(0, 120),
+			likes: comment.likes as number,
+			length: Array.from(comment.text ?? "").length,
+			liked_by_author: !!comment.liked_by_author,
+		}));
+	const likes = rated.map((comment) => comment.likes).sort((a, b) => a - b);
+	const median = likes.length ? likes[Math.floor(likes.length / 2)] : 0;
+	return {
+		rated: rated.length,
+		median_likes: median,
+		top: [...rated].sort((left, right) => right.likes - left.likes).slice(0, 5),
+		length_likes_correlation: correlation(
+			rated.map((comment) => comment.length),
+			rated.map((comment) => comment.likes),
+		),
+		acknowledged: rated.filter((comment) => comment.liked_by_author).length,
+	};
+}
+
+// Pearson, with the degenerate cases returning 0 rather than NaN: a section
+// where nothing has likes has no relationship to report, not an undefined one.
+function correlation(xs: number[], ys: number[]): number {
+	if (xs.length < 3) return 0;
+	const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+	const mx = mean(xs);
+	const my = mean(ys);
+	let numerator = 0;
+	let dx = 0;
+	let dy = 0;
+	for (let index = 0; index < xs.length; index++) {
+		const a = xs[index] - mx;
+		const b = ys[index] - my;
+		numerator += a * b;
+		dx += a * a;
+		dy += b * b;
+	}
+	if (!dx || !dy) return 0;
+	return Math.round((numerator / Math.sqrt(dx * dy)) * 100) / 100;
+}
+
+// Whether a comment has 梗 — the quality that makes a section laugh or answer.
+//
+// The numbers said what length could not: on the real section the top comment
+// was four characters ("下次一起唱", acknowledged by the author) and a 150-word
+// comment of praise vocabulary got two likes. Reading the top few shows why —
+// it picked up something the stream had just said, or named a specific work to
+// compare against. The long one described the singing in adjectives that would
+// fit any singer, which is what "没有梗" looks like in text.
+//
+// Three things are detectable from text alone, and each is returned with the
+// phrase that produced it so a reader can disagree:
+//
+//   echoes    — answers something already on screen ("下次一起唱", "欧克")
+//   specific  — names a work, a person, a place, a number (only a viewer could)
+//   turns     — a reversal or self-deprecation, which is where most humour sits
+//
+// A comment with none of them is not necessarily bad; it is simply not the kind
+// of comment this section rewards.
+export interface Wit {
+	echoes: string[];
+	specific: string[];
+	turns: string[];
+	// Adjectives about craft with no referent. The strongest negative signal:
+	// they apply to any work in the category.
+	generic_praise: string[];
+	verdict: "has-wit" | "flat" | "generic-praise";
+}
+
+// Answering rather than starting: a short reply to something just said. Very
+// short and ending in an agreement or a follow-on is the shape of an echo.
+const ECHO = /(欧克|收到|安排上|\+1|同意|确实|真的吗|是吧|对啊|哈哈哈|笑死|绝了|走起|下次一起|一起唱|我也来|来了来了)/;
+// Only a viewer can name this. A title, a person, a place or a number the
+// comment itself did not supply.
+const SPECIFIC = /(《[^》]{1,30}》|[A-Za-z][A-Za-z0-9]{2,}|王朝1982|同学|导演|原作|原唱|第\d+[集期]|\d+年|\d+月)/;
+// Reversal and self-deprecation: the turn is where humour usually lives.
+const TURN = /(结果|居然|竟然|没想到|本来|以为|反而|倒|差点|笑死|绷不住|不配|自卑|破防|泪目|不至于|凭什么)/;
+// Praise vocabulary that fits any work in the category. This is the negative
+// signal, not the positive one.
+const GENERIC =
+	/(唱腔|强弱层次|把控精妙|婉转|诠释到位|开口跪|天籁|余音绕梁|声线|功底扎实|表现力|感染力|氛围感|绝美|yyds|开阔大气|扑面而来|豪迈|傲骨|凌云|圆润|爆发|孤寂|雄心|古韵|层次|情感饱满|到位)/;
+
+export function measureWit(text: string): Wit {
+	const body = text.replace(/\s+/g, " ").trim();
+	const echoes = matches(body, ECHO);
+	const specific = matches(body, SPECIFIC);
+	const turns = matches(body, TURN);
+	const generic = matches(body, GENERIC);
+	const characters = Array.from(body).length;
+	// A generic-praise comment is one dominated by craft adjectives and carrying
+	// no referent: length alone is what let the 150-word one look substantial.
+	const praiseShare = characters ? generic.reduce((sum, phrase) => sum + Array.from(phrase).length, 0) / characters : 0;
+	const verdict: Wit["verdict"] =
+		praiseShare >= 0.15 && !specific.length
+			? "generic-praise"
+			: echoes.length || specific.length || turns.length
+				? "has-wit"
+				: "flat";
+	return { echoes, specific, turns, generic_praise: generic, verdict };
+}
+
+function matches(body: string, pattern: RegExp): string[] {
+	const found = new Set<string>();
+	for (const match of body.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))) {
+		if (match[0]) found.add(match[0]);
+	}
+	return [...found];
+}

@@ -18,6 +18,9 @@ export interface VoiceRecord {
 	profile: VoiceProfile;
 	sampled: number;
 	at: string;
+	// What the section rewarded, when the page showed it. Absent means the
+	// section reported no like counts, which is different from nobody liking it.
+	engagement?: { rated: number; median_likes: number; correlation: number };
 }
 
 const MARKER = "voice-profile";
@@ -36,6 +39,9 @@ export function voiceMemoryText(record: VoiceRecord): string {
 		profile.openers.length
 			? `反复出现的称呼：${profile.openers.map((open) => `${open.text}×${open.count}`).join("、")}。`
 			: "没有反复出现的称呼。",
+		record.engagement?.rated
+			? `有赞数的 ${record.engagement.rated} 条，中位 ${record.engagement.median_likes} 赞，长度与赞数相关 ${record.engagement.correlation}。`
+			: "",
 	].join("");
 }
 

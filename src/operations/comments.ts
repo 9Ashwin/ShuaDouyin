@@ -3,7 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Point, Session, Snapshot } from "../browser.ts";
 import { classifyComment } from "../comment-stance.ts";
 import type { Memory } from "../memory/concept.ts";
-import { profileVoice, voiceGuidance } from "../voice.ts";
+import { measureEngagement, measureWit, profileVoice, voiceGuidance } from "../voice.ts";
 import { control, listResults } from "./navigation.ts";
 import type { Input } from "./validate.ts";
 import { shapeOf, summarise, voiceMemories } from "./voice-memory.ts";
@@ -54,6 +54,16 @@ export async function commentVoice(session: Session, input: Input, signal: Abort
 		complete: listed.complete ?? false,
 		profile,
 		shape: shapeOf(profile),
+		engagement: {
+			...measureEngagement(listed.items ?? []),
+			// The verdicts are what a caller acts on: which comments in this
+			// section had something to say, and which were adjectives.
+			wit: (listed.items ?? [])
+				.filter((item) => item.text)
+				.map((item) => ({ text: (item.text ?? "").slice(0, 80), ...measureWit(item.text ?? "") }))
+				.sort((left, right) => Number(right.verdict === "has-wit") - Number(left.verdict === "has-wit"))
+				.slice(0, 8),
+		},
 		guidance: voiceGuidance(profile),
 		scope: "loaded_comments_of_this_work",
 		limitations: [

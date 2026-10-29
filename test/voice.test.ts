@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { profileVoice, voiceGuidance } from "../src/voice.ts";
+import { measureEngagement, measureWit, profileVoice, voiceGuidance } from "../src/voice.ts";
 
 test("a section that writes in paragraphs is not described as short", () => {
 	// The same code reported a median of 11 characters on one work and 46 on
@@ -51,4 +51,60 @@ test("nothing read is said rather than guessed", () => {
 	const empty = profileVoice([]);
 	assert.equal(empty.samples, 0);
 	assert.deepEqual(voiceGuidance(empty), ["No comments were read, so there is nothing to imitate."]);
+});
+
+test("engagement is measured, not assumed to follow length", () => {
+	// On a real section the top comment was four characters ("下次一起唱",
+	// acknowledged by the author) and the longest, most carefully written one had
+	// none. The measurement exists so a caller cannot quietly assume the
+	// opposite.
+	const engagement = measureEngagement([
+		{ text: "下次一起唱", likes: 247, liked_by_author: true },
+		{ text: "欧克", likes: 120 },
+		{ text: "这首歌有一点像王朝1982的《我本将心向明月》", likes: 63 },
+		{ text: "八千里路明照，回首功名笑孤鸿冥冥向霄，一路任啸十年寒窗无人晓，儿郎志气高", likes: 0 },
+	]);
+	assert.equal(engagement.rated, 4);
+	assert.equal(engagement.top[0].text, "下次一起唱");
+	assert.equal(engagement.top[0].liked_by_author, true);
+	assert.equal(engagement.acknowledged, 1);
+	// Longer did worse here, so the correlation is negative rather than zero or
+	// politely absent.
+	assert.ok(engagement.length_likes_correlation < 0, `was ${engagement.length_likes_correlation}`);
+});
+
+test("a section where nothing has likes reports no relationship", () => {
+	const quiet = measureEngagement([
+		{ text: "a", likes: 0 },
+		{ text: "b", likes: 0 },
+		{ text: "c", likes: 0 },
+	]);
+	assert.equal(quiet.length_likes_correlation, 0);
+	assert.equal(quiet.median_likes, 0);
+});
+
+test("what made a comment work is named, not scored", () => {
+	// Measured on one real section: the four-character "下次一起唱" was
+	// acknowledged by the author while a 150-character comment of craft
+	// adjectives got two likes. The difference is legible in text.
+	const echo = measureWit("下次一起唱");
+	assert.equal(echo.verdict, "has-wit");
+	assert.ok(echo.echoes.length);
+
+	const specific = measureWit("这首歌有一点像王朝1982的《我本将心向明月》");
+	assert.equal(specific.verdict, "has-wit");
+	assert.ok(specific.specific.some((phrase) => phrase.includes("王朝1982")));
+
+	const praise = measureWit(
+		"唱腔开阔大气，强弱层次把控精妙，没有嘶吼式爆发，却藏着少年凌云傲骨。若是带戏腔段落，转音圆润婉转，古韵扑面而来，把执着与豪迈诠释到位。",
+	);
+	assert.equal(praise.verdict, "generic-praise");
+	assert.ok(praise.generic_praise.length > 0);
+});
+
+test("a common character inside an ordinary sentence is not an echo", () => {
+	// "行" and "可以" appear inside polite requests; counting them marked every
+	// question as picking up the stream's last line.
+	assert.equal(measureWit("我妹妹结婚的时候，可以请您来唱这首歌吗").verdict, "flat");
+	assert.equal(measureWit("我就晚来几分钟。").verdict, "flat");
 });
