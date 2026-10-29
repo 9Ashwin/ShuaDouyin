@@ -145,6 +145,20 @@ test(
 			const live = comments.items.find((item) => item.id === "10002");
 			assert.equal(live?.text, "这是没有标记属性的评论正文");
 			assert.equal(live?.author, "真实作者");
+			// A comment can @ people, and every mention is a /user/ link inside the
+			// body. Counting them as author candidates made the author ambiguous, so
+			// the field came back empty on any comment that mentioned someone.
+			const mentions = comments.items.find((item) => item.id === "10007");
+			assert.equal(mentions?.author, "提人作者");
+			assert.match(mentions?.text ?? "", /@朋友一/);
+			// An image-only comment has no body. The fallback that picks the longest
+			// free text found the author's name in the header and reported the name
+			// as the comment, so every image comment read as if the author had
+			// written their own nickname.
+			const imageOnly = comments.items.find((item) => item.id === "10008");
+			assert.equal(imageOnly?.author, "图片作者");
+			assert.equal(imageOnly?.text, "");
+			assert.equal(imageOnly?.kind, "image");
 			// An emoji inside a comment is an inline image. The body must come back
 			// with the character the reader sees, and must never be the timestamp:
 			// the paragraph is not childless, so picking childless leaves alone

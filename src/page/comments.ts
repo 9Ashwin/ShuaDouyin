@@ -64,7 +64,10 @@ const TIMESTAMP =
 	/(分钟前|小时前|天前|周前|昨天|前天|刚刚|月前|\d{1,2}-\d{1,2}|\d{4}-\d{1,2}-\d{1,2}|\d{4}年\d{1,2}月)/;
 // Emoji in a comment are inline <img> elements whose alt is the character, so
 // the element holding the sentence is not childless and was skipped entirely.
-const INLINE = new Set(["IMG", "SVG", "BR", "PICTURE"]);
+// A mention is an inline <a> for the same reason: a comment that @s someone
+// wraps part of its sentence in a link, and treating that as non-inline made
+// the whole body disappear.
+const INLINE = new Set(["IMG", "SVG", "BR", "PICTURE", "A"]);
 const EMOJI_SOURCE = /twemoji/i;
 
 function bodyText(element: HTMLElement): string {
@@ -87,8 +90,16 @@ function commentBody(owned: (selectors: string) => HTMLElement[]): string {
 	if (marked.length === 1) return bodyText(marked[0]);
 	// The author name appears both as the profile link and as a span inside it,
 	// so matching on text alone is not enough; the link subtree is excluded.
+	// The header that holds the name and the timestamp is not always inside the
+	// link, and a comment with only an image has no body of its own — its row's
+	// longest leaf was the author's name, so the name came back as the comment.
 	const authors = owned('a[href*="/user/"]');
-	const inAuthor = (element: HTMLElement) => authors.some((anchor) => anchor === element || anchor.contains(element));
+	// The header class is `comment-item-info-wrap`. Matching "wrapper" missed it,
+	// and the name's span chain sits inside the profile anchor rather than beside
+	// it, so the link-subtree check alone did not reach every wrapper in the chain.
+	const header = (element: HTMLElement) => !!element.closest('[class*="comment-item-info-wrap"]');
+	const inAuthor = (element: HTMLElement) =>
+		header(element) || authors.some((anchor) => anchor === element || anchor.contains(element));
 	const leaves = owned("span,div").filter(
 		(element) =>
 			!inAuthor(element) &&
@@ -183,24 +194,27 @@ export function readComments(videoID: string) {
 					: null;
 				// ALink is the site's own link component, not a per-build class, so it
 				// survives rebuilds where the wrapper class does not.
-				const authors = owned(
+				const anchors = owned(
 					'.comment-item-avatar a[href],a[data-e2e="comment-author"],a.ALink-a[href*="/user/"]',
 				) as HTMLAnchorElement[];
-				const ids = new Set(
-					authors
-						.map((author) => {
-							const url = new URL(author.href);
-							return url.origin === "https://www.douyin.com"
-								? /^\/user\/([^/]+)\/?$/.exec(url.pathname)?.[1]
-								: undefined;
-						})
-						.filter((id): id is string => !!id),
-				);
-				const authorID = ids.size === 1 ? [...ids][0] : null;
-				const matchingAuthors = authors.filter((candidate) => {
-					const url = new URL(candidate.href);
-					return url.origin === "https://www.douyin.com" && /^\/user\/([^/]+)\/?$/.exec(url.pathname)?.[1] === authorID;
+				const userID = (anchor: HTMLAnchorElement): string | undefined => {
+					const url = new URL(anchor.href);
+					return url.origin === "https://www.douyin.com" ? /^\/user\/([^/]+)\/?$/.exec(url.pathname)?.[1] : undefined;
+				};
+				// A comment can @ people, and each mention is a /user/ link inside the
+				// body. Counting every link made an @-heavy comment look ambiguous and
+				// left its author empty. The author is the link that carries the
+				// avatar or the name, not one that starts with @.
+				const body = row.querySelector('[data-e2e="comment-content"],.comment-item-content');
+				const authors = anchors.filter((anchor) => {
+					if (anchor.closest('[data-e2e="comment-content"],.comment-item-content') !== body) return true;
+					// Inside the body, a mention is identifiable by its text; an author
+					// link is not rendered there.
+					return !clean(anchor.textContent).startsWith("@");
 				});
+				const ids = new Set(authors.map(userID).filter((id): id is string => !!id));
+				const authorID = ids.size === 1 ? [...ids][0] : null;
+				const matchingAuthors = authors.filter((candidate) => userID(candidate) === authorID);
 				const author = authorID
 					? (matchingAuthors.find((candidate) => clean(candidate.textContent)) ?? matchingAuthors[0])
 					: null;

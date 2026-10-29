@@ -26,6 +26,15 @@ export const fixture = `<!doctype html>
      wrapper classes, so this row mirrors that shape: id only from tooltip_,
      author inside an ALink, body as plain spans with a timestamp and a count. -->
 <div data-e2e="comment-item"><div><span id="tooltip_10002"></span></div><div><a class="ALink-a" href="/user/author_456"><span>真实作者</span></a><span class="x9">这是没有标记属性的评论正文</span><span>3小时前·浙江</span><span>12</span><span>回复</span></div></div>
+<!-- A comment that @-mentions people carries one /user/ link per mention inside
+     the body. Counting every link made the author look ambiguous and left the
+     field empty, so the fixture keeps that shape next to a real author. -->
+<div data-e2e="comment-item"><div><span id="tooltip_10007"></span></div><div><a class="ALink-a" href="/user/author_mention"><span>提人作者</span></a><span class="x9">谢谢 <a class="ALink-a" href="/user/friend_one">@朋友一</a> 和 <a class="ALink-a" href="/user/friend_two">@朋友二</a></span><span>2小时前·上海</span><span>3</span><span>回复</span></div></div>
+<!-- An image-only comment has no body text. Its header sits in
+     comment-item-info-wrap and carries the author's name in a span chain, so the
+     "longest free text" fallback returned the name as the comment. This row
+     keeps that shape and has no content element at all. -->
+<div data-e2e="comment-item"><div class="comment-item-info-wrap" id="tooltip_10008"><div><a class="ALink-a" href="/user/author_image"><span><span>图片作者</span></span></a></div></div><div><img data-e2e="comment-image" alt="图片评论" src="//p3-pc.douyinpic.com/aweme/100x100/comment-image.jpeg"></div></div>
 <!-- A voice comment carries a player and, when the platform made one, its own
      transcript. With no text and no image it used to be dropped from the list.
      The second one has a transcript, the first does not. -->
