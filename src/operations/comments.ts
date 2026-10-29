@@ -5,6 +5,7 @@ import { classifyComment } from "../comment-stance.ts";
 import type { Memory } from "../memory/concept.ts";
 import { measureEngagement, measureWit, profileVoice, voiceGuidance } from "../voice.ts";
 import { control, listResults } from "./navigation.ts";
+import { availablePhrases, candidatePhrase, measureSameness, PHRASE_RULE, phraseMemories } from "./phrases.ts";
 import type { Input } from "./validate.ts";
 import { shapeOf, summarise, voiceMemories } from "./voice-memory.ts";
 
@@ -41,7 +42,7 @@ export async function listComments(session: Session, input: Input, signal: Abort
 // 11 and 28 characters, so a single global style would be wrong for both.
 export async function commentVoice(session: Session, input: Input, signal: AbortSignal): Promise<unknown> {
 	const listed = (await listComments(session, input, signal)) as {
-		items?: { text?: string; stance?: string }[];
+		items?: { text?: string; stance?: string; likes?: number | null; liked_by_author?: boolean }[];
 		complete?: boolean;
 	};
 	const samples = (listed.items ?? [])
@@ -65,12 +66,66 @@ export async function commentVoice(session: Session, input: Input, signal: Abort
 				.slice(0, 8),
 		},
 		guidance: voiceGuidance(profile),
+		// The comments that landed, reduced to a phrase that could travel. The
+		// whole sentence is tied to one work; these are the shapes worth keeping.
+		candidates: (listed.items ?? [])
+			.filter((item) => item.text)
+			.map((item) =>
+				candidatePhrase(
+					{ text: item.text ?? "", likes: item.likes ?? null },
+					measureWit(item.text ?? ""),
+					input.video_id ?? "",
+				),
+			)
+			.filter((phrase): phrase is NonNullable<typeof phrase> => phrase !== null),
 		scope: "loaded_comments_of_this_work",
 		limitations: [
 			"Measured from the comments this page had loaded, not from every comment on the work.",
 			"A profile describes the section, not every reader in it. Writing to the median is a start, not a rule.",
 			"Imitating a section is a style choice; it does not make a comment worth reading.",
 		],
+	};
+}
+
+// Which phrases are available to say right now, and which have been used
+// enough that saying them again would read as a repeat.
+export function phraseReport(memories: Memory[], now = new Date()): unknown {
+	const { usable, spent } = availablePhrases(phraseMemories(memories), now);
+	return {
+		usable: usable.map((phrase) => ({
+			text: phrase.text,
+			kind: phrase.kind,
+			status: phrase.status,
+			used: phrase.used,
+			idle_days: phrase.idle_days,
+			likes: phrase.likes,
+			from_video: phrase.from_video,
+		})),
+		spent: spent.map((phrase) => ({
+			text: phrase.text,
+			used: phrase.used,
+			idle_days: phrase.idle_days,
+			// How long until it is worth saying again, rather than a flat "no".
+			resting_days_left: Math.max(0, 14 - phrase.idle_days),
+		})),
+		rule: PHRASE_RULE,
+		scope: "phrase_ledger",
+	};
+}
+
+// Whether the comments actually written are starting to look the same. The
+// ledger guards one phrase; this guards the pattern across phrases, which is
+// what a reader notices first.
+export function samenessReport(comments: { text: string; at?: string }[]): unknown {
+	const sameness = measureSameness(comments);
+	return {
+		...sameness,
+		rule:
+			sameness.verdict === "template"
+				? "The last comments repeat a phrase. Change the angle, not just the wording."
+				: sameness.verdict === "narrowing"
+					? "The last comments are converging on one shape. That is fine for a while; it stops being fine when a reader can predict the next one."
+					: "The last comments vary in length and opening.",
 	};
 }
 

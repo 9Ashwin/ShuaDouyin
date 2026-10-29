@@ -11,7 +11,15 @@ import { compareChatWindows } from "./operations/chat-diff.ts";
 import { chatHistory } from "./operations/chat-history.ts";
 import { sendChatImage } from "./operations/chat-image.ts";
 import { sendCommentImage } from "./operations/comment-image.ts";
-import { closeComments, commentVoice, knownVoices, listComments, listReplies } from "./operations/comments.ts";
+import {
+	closeComments,
+	commentVoice,
+	knownVoices,
+	listComments,
+	listReplies,
+	phraseReport,
+	samenessReport,
+} from "./operations/comments.ts";
 import { inspectCreator } from "./operations/creator.ts";
 import { digest } from "./operations/digest.ts";
 import { pageFactsRead } from "./operations/facts.ts";
@@ -34,6 +42,7 @@ import {
 	waitSearchResults,
 	waitSnapshot,
 } from "./operations/navigation.ts";
+import { type Phrase, phraseMemories, phraseMemoryText, usePhrase } from "./operations/phrases.ts";
 import { userRelations } from "./operations/relations.ts";
 import { skillInstall, skillStatus } from "./operations/skill.ts";
 import { checkGoalQuota, pauseState } from "./operations/social.ts";
@@ -435,6 +444,48 @@ export class App {
 				});
 			case "comment.list":
 				return listComments(session, input, signal);
+			case "comment.phrases": {
+				const known = new Knowledge(this.store.base);
+				if (!input.text) {
+					const memories = (await known.execute("memory.list", {})) as Memory[];
+					// What was actually written is the check the ledger cannot make:
+					// different phrases can still add up to one formula.
+					const events = await this.store.events();
+					const written = events
+						.filter((event) => event.operation === "comment.post" || event.operation === "comment.reply")
+						.map((event) => ({
+							text:
+								typeof (event.data as { text?: unknown })?.text === "string"
+									? ((event.data as { text: string }).text ?? "")
+									: "",
+							at: event.at,
+						}))
+						.filter((comment) => comment.text)
+						.slice(-20);
+					return { ...(phraseReport(memories) as object), sameness: samenessReport(written) };
+				}
+				// Recording a use is a local write: it changes what the ledger will
+				// offer next, and saying so is what keeps a phrase from becoming a tic.
+				const memories = (await known.execute("memory.list", {})) as Memory[];
+				const found = phraseMemories(memories).find((phrase) => phrase.text === input.text);
+				if (!found) throw new CliError("not_found", "No learned phrase matches that text");
+				const updated = usePhrase(found, new Date());
+				const target = memories.find(
+					(memory) => memory.tags?.includes("phrase-ledger") && memory.body.includes(`「${found.text}」`),
+				);
+				if (!target) throw new CliError("state_corrupt", "The phrase ledger entry is missing");
+				await known.execute("memory.update", {
+					resource: target.id,
+					text: phraseMemoryText(updated),
+					source: `phrase:${found.from_video}`,
+					if_match: target.revision,
+					layer: "experience",
+					memory_type: "insight",
+					topic: "可用句式",
+					tags: "phrase-ledger,comment-style",
+				});
+				return { recorded: true, phrase: updated };
+			}
 			case "comment.voice": {
 				// No browse target means the caller is asking what has been learned,
 				// which needs no page at all.
@@ -469,7 +520,29 @@ export class App {
 					certainty: "observed",
 					confidence: 0.6,
 				});
-				return { ...measured, saved };
+				// The comments that landed become the ledger's first entries. A phrase
+				// already in the ledger is not added again: a second entry would look
+				// fresh and be offered as if new, which is the repetition this ledger
+				// exists to prevent.
+				const existing = new Set(
+					phraseMemories((await known.execute("memory.list", {})) as Memory[]).map((phrase) => phrase.text),
+				);
+				const learned: string[] = [];
+				for (const candidate of (measured as { candidates?: Phrase[] }).candidates ?? []) {
+					if (existing.has(candidate.text)) continue;
+					await known.execute("memory.add", {
+						text: phraseMemoryText(candidate),
+						source: `video:${candidate.from_video || "unknown"}`,
+						layer: "experience",
+						memory_type: "insight",
+						topic: "可用句式",
+						tags: "phrase-ledger,comment-style",
+						certainty: "observed",
+						confidence: 0.5,
+					});
+					learned.push(candidate.text);
+				}
+				return { ...measured, saved, learned };
 			}
 			case "comment.replies":
 				return listReplies(session, input, signal);

@@ -882,6 +882,21 @@ export const COMMANDS: CommandSpec[] = [
 			"Returns length, exclamation habit, repeated openers, direct address, first person and questions, each with the count behind it, plus guidance lines. Measured per work: two sections read minutes apart had a median length of 11 and 28 characters, so one global style would be wrong for both. --save keeps the measurement so later sections can be compared against it; comment voice with no work reports what has been saved.",
 	},
 	{
+		id: "comment.phrases",
+		description: "Which learned phrases are available to say, and which have been used enough",
+		flags: [
+			{
+				key: "text",
+				name: "--use <phrase>",
+				description: "Record that this phrase was said, so the ledger can tell fresh from spent",
+				type: "string",
+			},
+		],
+		effect: "local",
+		guidance:
+			"A phrase earns its place by being used once and then resting. Three uses without two weeks of silence marks it spent, and spent phrases are reported rather than hidden — a caller that cannot see them keeps reaching for the same line. Without --use this only reports.",
+	},
+	{
 		id: "comment.list",
 		description: "Read loaded public comments with stable IDs",
 		flags: [video, ...paging],
