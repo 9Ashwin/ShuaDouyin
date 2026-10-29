@@ -113,3 +113,49 @@ test("a shape is decided by the spread, not just the middle", () => {
 	assert.equal(shapeOf({ ...base, length: { mean: 20, median: 20, p90: 80 } }), "short-sentence");
 	assert.equal(shapeOf({ ...base, length: { mean: 50, median: 40, p90: 90 } }), "paragraph");
 });
+
+test("a saved measurement reads back the habits it wrote down", async () => {
+	// The text names the repeated openers and the like correlation because a
+	// reader needs them. The parser did not read them back, so `--known` lost
+	// every one of them and `summarise` never saw the greeting habit at all.
+	const { voiceMemoryText, voiceMemories } = await import("../src/operations/voice-memory.ts");
+	const body = voiceMemoryText({
+		video_id: "7694232961361244347",
+		sampled: 20,
+		at: "2026-01-01T00:00:00.000Z",
+		profile: {
+			samples: 20,
+			length: { mean: 18, median: 14, p90: 32 },
+			exclamation: { samples: 6, repeated: 2 },
+			openers: [
+				{ text: "龟龟", count: 4 },
+				{ text: "宝", count: 2 },
+			],
+			addresses_author: 3,
+			uses_emoji: 5,
+			first_person: 2,
+			questions: 4,
+		},
+		engagement: { rated: 12, median_likes: 340, correlation: -0.38 },
+	});
+	const read = voiceMemories([
+		{
+			id: "m1",
+			file: "memory/experience/x.md",
+			title: "评论区风格",
+			body,
+			tags: ["voice-profile", "comment-style"],
+			revision: "abc",
+			created_at: "2026-01-01T00:00:00.000Z",
+			updated_at: "2026-01-01T00:00:00.000Z",
+			type: "insight",
+		},
+	] as never);
+	const record = read[0];
+	assert.deepEqual(record?.profile.openers, [
+		{ text: "龟龟", count: 4 },
+		{ text: "宝", count: 2 },
+	]);
+	assert.deepEqual(record?.engagement, { rated: 12, median_likes: 340, correlation: -0.38 });
+	assert.equal(record?.profile.length.median, 14);
+});

@@ -51,7 +51,7 @@ import { sourceCheckout } from "./operations/source.ts";
 import { updateReport } from "./operations/update.ts";
 import { type Input, isWrite, validate } from "./operations/validate.ts";
 import { transcribeVoices } from "./operations/voice.ts";
-import { voiceMemoryText } from "./operations/voice-memory.ts";
+import { type VoiceRecord, voiceMemories, voiceMemoryText } from "./operations/voice-memory.ts";
 import { write } from "./operations/write.ts";
 import { quiet, type Reproduce } from "./progress.ts";
 import { type BrowserConfig, Store } from "./store.ts";
@@ -540,24 +540,67 @@ export class App {
 					video_id: string | null;
 					sampled: number;
 					profile: VoiceProfile;
+					engagement?: VoiceRecord["engagement"];
 				};
 				if (!input.write) return measured;
 				const known = new Knowledge(this.store.base);
-				const saved = await known.execute("memory.add", {
-					text: voiceMemoryText({
-						video_id: measured.video_id ?? "",
-						profile: measured.profile,
-						sampled: measured.sampled,
-						at: new Date().toISOString(),
-					}),
-					source: `video:${measured.video_id ?? "unknown"}`,
-					layer: "experience",
-					memory_type: "insight",
-					topic: "评论区风格",
-					tags: "voice-profile,comment-style",
-					certainty: "observed",
-					confidence: 0.6,
+				// Measuring the same work again should update what is known about it,
+				// not add a second section. Two records of one work were counted as two
+				// sections by summarise, which then reported a history the account never
+				// had.
+				const previous = voiceMemories((await known.execute("memory.list", { limit: 1000 })) as Memory[]).find(
+					(record) => record.video_id === (measured.video_id ?? ""),
+				);
+				const previousMemory = previous
+					? ((await known.execute("memory.list", { limit: 1000 })) as Memory[]).find(
+							(memory) => memory.tags?.includes("voice-profile") && memory.body.includes(`作品 ${previous.video_id}`),
+						)
+					: undefined;
+				const body = voiceMemoryText({
+					video_id: measured.video_id ?? "",
+					profile: measured.profile,
+					sampled: measured.sampled,
+					// The measurement already reported how the section's comments were
+					// received; dropping it here meant the saved record could never say
+					// whether length had anything to do with likes, which is the one
+					// question a later comparison would ask.
+					...(measured.engagement ? { engagement: measured.engagement } : {}),
+					at: new Date().toISOString(),
 				});
+				if (previousMemory) {
+					await known.execute("memory.update", {
+						resource: previousMemory.id,
+						text: body,
+						source: `video:${measured.video_id ?? "unknown"}`,
+						if_match: previousMemory.revision,
+						layer: "experience",
+						memory_type: "insight",
+						topic: "评论区风格",
+						tags: "voice-profile,comment-style",
+					});
+				}
+				const saved = previousMemory
+					? { updated: previousMemory.id }
+					: await known.execute("memory.add", {
+							text: voiceMemoryText({
+								video_id: measured.video_id ?? "",
+								profile: measured.profile,
+								sampled: measured.sampled,
+								// The measurement already reported how the section's comments were
+								// received; dropping it here meant the saved record could never say
+								// whether length had anything to do with likes, which is the one
+								// question a later comparison would ask.
+								...(measured.engagement ? { engagement: measured.engagement } : {}),
+								at: new Date().toISOString(),
+							}),
+							source: `video:${measured.video_id ?? "unknown"}`,
+							layer: "experience",
+							memory_type: "insight",
+							topic: "评论区风格",
+							tags: "voice-profile,comment-style",
+							certainty: "observed",
+							confidence: 0.6,
+						});
 				// The comments that landed become the ledger's first entries. A phrase
 				// already in the ledger is not added again: a second entry would look
 				// fresh and be offered as if new, which is the repetition this ledger

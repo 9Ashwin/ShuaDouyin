@@ -1,6 +1,4 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { CliError } from "../errors.ts";
 import { profileVoice, type VoiceProfile } from "../voice.ts";
 import type { Workspaces } from "../workspace.ts";
@@ -231,10 +229,6 @@ export function presetOf(section: string | null): string | null {
 	if (!section) return null;
 	for (const [name, value] of Object.entries(PRESETS)) if (section.includes(value)) return name;
 	return null;
-}
-
-export async function readPersonaFile(workspaces: Workspaces): Promise<string> {
-	return readFile(join(workspaces.root(), "AGENTS.md"), "utf8");
 }
 
 export interface Migration {

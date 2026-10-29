@@ -181,7 +181,10 @@ function collect(text: string, rules: Rule[]): Tell[] {
 }
 
 export function checkVoice(text: string): Verdict {
-	const body = text.replace(/\s+/g, " ").trim();
+	// The text is checked as written. Collapsing whitespace first made the reported
+	// offsets point into a different string than the one the caller passed in, so
+	// `index` named a position where the phrase was not.
+	const body = text;
 	const tells = collect(body, RULES);
 	const overcorrected = collect(body, OVERCORRECTED);
 	// Two or more of the same family, or three different families, is a pattern

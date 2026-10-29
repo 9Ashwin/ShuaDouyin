@@ -113,14 +113,46 @@ export function voiceMemories(memories: Memory[]): VoiceRecord[] {
 					samples: Number(sampled ?? 0),
 					length: { mean: 0, median: Number(median ?? 0), p90: Number(p90 ?? 0) },
 					exclamation: { samples: 0, repeated: countIn(memory.body, "连续感叹号") },
-					openers: [],
+					// The text already names the openers that repeat. Reading them back is
+					// what lets the "this section greets people the same way" branch of
+					// summarise ever fire; leaving the list empty meant the habit was
+					// written down and then never seen again.
+					openers: readOpeners(memory.body),
 					addresses_author: countIn(memory.body, "直呼作者"),
 					uses_emoji: 0,
 					first_person: countIn(memory.body, "第一人称"),
 					questions: countIn(memory.body, "提问"),
 				},
+				...(readEngagement(memory.body) ?? {}),
 			};
 		});
+}
+
+// "反复出现的称呼：龟龟×4、宝×2。" The counts are part of the text because a reader
+// needs them; a later round needs the list.
+function readOpeners(body: string): { text: string; count: number }[] {
+	const line = /反复出现的称呼：([^。]+)。/.exec(body)?.[1];
+	if (!line) return [];
+	return line
+		.split("、")
+		.map((entry) => /^(.+?)[×x](\d+)$/u.exec(entry.trim()))
+		.filter((match): match is RegExpExecArray => match !== null)
+		.map((match) => ({ text: match[1] ?? "", count: Number(match[2]) }));
+}
+
+// "有赞数的 12 条，中位 340 赞，长度与赞数相关 -0.38。" Written by voiceMemoryText
+// and never read back, so a saved measurement could not answer the question it
+// was saved for.
+function readEngagement(body: string): { engagement: VoiceRecord["engagement"] } | null {
+	const match = /有赞数的 (\d+) 条，中位 (\d+) 赞，长度与赞数相关 (-?[\d.]+)。/.exec(body);
+	if (!match) return null;
+	return {
+		engagement: {
+			rated: Number(match[1]),
+			median_likes: Number(match[2]),
+			correlation: Number(match[3]),
+		},
+	};
 }
 
 // The stored text keeps percentages for a reader; grouping needs the counts
