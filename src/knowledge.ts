@@ -446,8 +446,26 @@ export class Knowledge {
 					const recalled = await memory.recall({ ...scope, query: input.query, profile_ref: input.profile_ref });
 					// Profiles are user-edited Markdown without a guaranteed parseable schema.
 					// A full profile document or overview can contain other people's details.
-					const files = input.profile_ref ? ["AGENTS.md"] : ["AGENTS.md", "PROFILES.md", "MEMORY.md"];
-					const documents = await Promise.all(files.map((file) => this.workspaces.document(file)));
+					//
+					// lessons.md belongs here for the same reason AGENTS.md does: it is what
+					// earlier rounds learned, and a context export that leaves it out hands
+					// the next round an agent that has to relearn everything. It is missing
+					// rather than empty on a fresh workspace, so its absence is tolerated.
+					const files = input.profile_ref ? ["AGENTS.md"] : ["AGENTS.md", "PROFILES.md", "MEMORY.md", "lessons.md"];
+					const documents = (
+						await Promise.all(
+							files.map(async (file) => {
+								try {
+									return await this.workspaces.document(file);
+								} catch (error) {
+									// A workspace that has not learned anything yet has no file, and
+									// that is a normal state rather than a failure.
+									if (file === "lessons.md" && error instanceof CliError && error.code === "not_found") return null;
+									throw error;
+								}
+							}),
+						)
+					).filter((document): document is NonNullable<typeof document> => document !== null);
 					const budget = input.budget ?? 12000;
 					const memoryBudget = recalled.hits.length ? Math.min(1800, Math.floor(budget / 2)) : 0;
 					const packed = packMemories(recalled.hits, memoryBudget, input.limit ?? 20);

@@ -110,3 +110,32 @@ test("lessons.md is readable and editable like any other workspace document", as
 	await workspaces.setDocument("lessons.md", edited, document.revision);
 	assert.ok((await workspaces.document("lessons.md")).content.includes("我自己改过的"));
 });
+
+test("--since limits what counts as this round, rather than only labelling it", async (t) => {
+	// The flag was accepted and echoed into a source label while every event was
+	// still considered, so a caller that named a start time got findings from
+	// everything ever recorded.
+	const workspaces = await setup(t);
+	const old = {
+		id: "old",
+		at: "2026-01-01T00:00:00.000Z",
+		operation: "feed.next",
+		data: { ok: false, error_code: "selector_changed" },
+	};
+	const recent = { ...old, id: "new", at: "2026-06-01T00:00:00.000Z" };
+	const scoped = await keepFindings(workspaces, [old, old, recent, recent], {
+		since: "2026-05-01T00:00:00.000Z",
+		write: false,
+	});
+	// Two recent failures are enough for a gotcha; the old pair is out of scope.
+	assert.equal(scoped.findings.filter((finding) => finding.kind === "gotcha").length, 1);
+	const all = await keepFindings(workspaces, [old, old], { write: false });
+	assert.equal(all.findings.filter((finding) => finding.kind === "gotcha").length, 1);
+});
+
+test("an invalid --since is refused rather than ignored", async (t) => {
+	const workspaces = await setup(t);
+	await assert.rejects(keepFindings(workspaces, [], { since: "last tuesday", note: "x" }), {
+		code: "invalid_argument",
+	});
+});

@@ -7,6 +7,7 @@ import type { Receipt, Store } from "../store.ts";
 import { openComments } from "./comments.ts";
 import { control, openSharePanel, selectChat } from "./navigation.ts";
 import type { Input } from "./validate.ts";
+import { checkVoice } from "./voice-check.ts";
 
 // Account writes own the receipt contract: a receipt is durable before any
 // input can dispatch, a confirmed request ID replays locally, and a possibly
@@ -29,6 +30,20 @@ function uncertain(key: string, receipt?: Receipt, cause?: unknown, reason?: str
 		details: { request_id: key, receipt, ...(reason ? { reason } : {}) },
 		cause,
 	});
+}
+
+// What the caller is told about how its own text reads. Only the verdict and the
+// names of what was found travel with a successful send; the full report with
+// offsets and reasons stays in `voice check`, which is where a caller goes when
+// it wants to act on it.
+export function verdictOf(text: string) {
+	const { verdict, tells, overcorrected } = checkVoice(text);
+	if (verdict === "reads-human" && !tells.length && !overcorrected.length) return { verdict };
+	return {
+		verdict,
+		tells: [...new Set(tells.map((tell) => tell.name))],
+		...(overcorrected.length ? { overcorrected: [...new Set(overcorrected.map((tell) => tell.name))] } : {}),
+	};
 }
 
 export async function write(
@@ -343,7 +358,17 @@ export async function write(
 			result: confirmed.result,
 		});
 		step("confirmed", { request_id: key });
-		return { request_id: key, confirmed: true, changed: true, result: confirmed.result };
+		return {
+			request_id: key,
+			confirmed: true,
+			changed: true,
+			result: confirmed.result,
+			// A public comment carries this account's voice, so the report says how
+			// it reads. Reported, never enforced: the tell catalog is advice, and
+			// blocking a send on it would be the tool deciding what the account may
+			// say. Chat messages are left out — they are not public prose.
+			...(operation === "comment.post" || operation === "comment.reply" ? { voice: verdictOf(input.text ?? "") } : {}),
+		};
 	} catch (error) {
 		// Clear this attempt's own typing before anything else. Nothing is sent, so
 		// the text is residue, and leaving it makes the composer look like a user

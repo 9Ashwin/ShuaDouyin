@@ -121,7 +121,20 @@ export async function keepFindings(
 	events: unknown[],
 	options: { note?: string; since?: string; write?: boolean } = {},
 ): Promise<KeepResult> {
-	const proposals = candidateFindings(events);
+	// --since limits what counts as this round's activity. It was accepted and
+	// only echoed into a source label, so a round that named a start time still
+	// learned from everything ever recorded — the filter said one thing and did
+	// another.
+	let scope = events;
+	if (options.since !== undefined) {
+		const from = Date.parse(options.since);
+		if (!Number.isFinite(from)) throw new CliError("invalid_argument", "--since must be an RFC3339 timestamp");
+		scope = events.filter((event) => {
+			const at = event && typeof event === "object" ? (event as { at?: unknown }).at : undefined;
+			return typeof at === "string" && Date.parse(at) >= from;
+		});
+	}
+	const proposals = candidateFindings(scope);
 	const note = (options.note ?? "").trim();
 	// A caller that read the activity and reached its own conclusion can say so in
 	// one line; that line is recorded verbatim and marked as authored, which is

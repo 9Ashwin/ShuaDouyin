@@ -67,3 +67,15 @@ test("every tell carries where it starts and why", () => {
 	assert.equal(verdict.tells[0]?.match, "未来已来");
 	assert.ok((verdict.tells[0]?.why.length ?? 0) > 5);
 });
+
+test("a send carries only the verdict and names, not the whole report", async () => {
+	// A successful comment reports how it reads without turning every response
+	// into a style review; the offsets and reasons stay in voice check.
+	const { verdictOf } = await import("../src/operations/write.ts");
+	assert.deepEqual(verdictOf("这光打得像老电影。"), { verdict: "reads-human" });
+	// Two occurrences of one family is a pattern, so this is still-ai and the
+	// names are deduplicated: the caller learns the family, not the count.
+	const flagged = verdictOf("未来已来，值得我们深思。");
+	assert.equal(flagged.verdict, "still-ai");
+	assert.deepEqual(flagged.tells, ["结尾升华"]);
+});
