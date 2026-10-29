@@ -103,3 +103,18 @@ export async function latestCommit(timeoutMs = 5000): Promise<{ head: string | n
 		return { head: null, error: cause instanceof Error ? cause.message.split("\n")[0] : "Network unavailable" };
 	}
 }
+
+// The whole answer `dy update` gives, so both the dispatch path and a test can
+// call it without inventing a workspace.
+export async function updateReport(check: boolean): Promise<unknown> {
+	const shape = installShape();
+	if (!check) return { ...shape, latest: null, behind: null, note: null };
+	const remote = await latestCommit();
+	return {
+		...shape,
+		latest: remote.head,
+		// null means "cannot tell", which is not the same as false.
+		behind: shape.head && remote.head ? shape.head !== remote.head : null,
+		note: remote.error,
+	};
+}

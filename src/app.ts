@@ -47,7 +47,7 @@ import { userRelations } from "./operations/relations.ts";
 import { skillInstall, skillStatus } from "./operations/skill.ts";
 import { checkGoalQuota, pauseState } from "./operations/social.ts";
 import { sourceCheckout } from "./operations/source.ts";
-import { installShape, latestCommit } from "./operations/update.ts";
+import { updateReport } from "./operations/update.ts";
 import { type Input, isWrite, validate } from "./operations/validate.ts";
 import { transcribeVoices } from "./operations/voice.ts";
 import { voiceMemoryText } from "./operations/voice-memory.ts";
@@ -129,10 +129,12 @@ export class App {
 				...(image ? { media: { mime: image.mime, bytes: image.bytes.length, sha256: image.sha256 } } : {}),
 			};
 		}
-		if (local) return new Knowledge(this.store.base).execute(operation, input, signal);
-		// Reading the installed skills compares files in the repository, not the
-		// workspace, so it must not queue behind a browser command holding the lock.
+		// These answer about the installation itself, so they need no workspace:
+		// asking how to update a copy must work on a machine that never ran
+		// `dy init`, which is exactly the machine that needs the answer.
+		if (operation === "update") return updateReport(input.force === true);
 		if (operation === "skill.status") return skillStatus();
+		if (local) return new Knowledge(this.store.base).execute(operation, input, signal);
 		if (operation === "skill.install") return skillInstall(undefined, { force: input.force });
 		const run = async (botSignal?: AbortSignal) => {
 			return this.store.withLock(async (leaseSignal) => {
@@ -276,17 +278,6 @@ export class App {
 			}
 			case "source":
 				return sourceCheckout();
-			case "update": {
-				const shape = installShape();
-				if (!input.force) return { ...shape, latest: null, behind: null, note: null };
-				const remote = await latestCommit();
-				return {
-					...shape,
-					latest: remote.head,
-					behind: shape.head && remote.head ? shape.head !== remote.head : null,
-					note: remote.error,
-				};
-			}
 			case "link.resolve":
 				return resolveLink(input.resource ?? "", signal);
 			case "browser.config":
