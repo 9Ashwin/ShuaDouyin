@@ -124,7 +124,8 @@ dy comment replies --comment-id <id>             # 展开某条评论的回复
 dy comment post --text "…"                       # 发顶层评论
 dy comment reply --comment-id <id> --text "…"    # 回复某条评论
 dy comment image --image <路径>                  # 发图片评论
-dy comment voice [--limit 20]                    # 学这个区怎么写
+dy comment voice [--limit 20 --save]             # 学这个区怎么写
+dy comment voice --known                         # 看已经学过的区
 dy comment close                                 # 关掉评论面板
 ```
 
@@ -149,6 +150,27 @@ dy comment voice --limit 20
 > 50% address the author directly. Writing about the work without addressing anyone is the minority style.
 
 **写之前先跑一次。** 对着中位数写，比凭感觉写更接近本地口吻。但注意：模仿风格不等于评论有价值——那是两件事。
+
+### 让它越刷越懂
+
+```bash
+dy comment voice --save     # 量完存下来
+dy comment voice --known    # 看已经学过的区
+```
+
+`--save` 把这次测量存成一条 `insight` 记忆（标签 `voice-profile`），`--known` 按**形状**把它们归并：
+
+```
+paragraph        x3  | median 40-52 | addresses the author, speaks in the first person
+short-sentence   x7  | median 18-25 | asks questions
+one-liner        x2  | median 6-11  |
+```
+
+形状由长度分位数决定（`p90 ≤ 25` 是一句话，`median ≤ 25` 是短句，其余是段落），不是拍脑袋的标签。
+
+**为什么存而不是每次重算：**一条一条列出来没人看，累积下来有用的是「这条区的样子和我见过的那类像不像」。下次遇到相似的区，`--known` 告诉你之前那类区怎么写才像本地人。
+
+存的是数字和结论，不是原文——记忆里没有别人的评论内容。
 
 ## 私信
 

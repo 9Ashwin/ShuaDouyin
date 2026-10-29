@@ -3,6 +3,7 @@ import { ChromeManager, type Session } from "./browser.ts";
 import { COMMANDS } from "./catalog.ts";
 import { CliError, normalizeError } from "./errors.ts";
 import { Knowledge, knowledgeOperation, validateKnowledge } from "./knowledge.ts";
+import type { Memory } from "./memory/concept.ts";
 import { migrateLegacyLayout } from "./migrate.ts";
 import { audio, capture, noteImage, noteSlide, observe } from "./operations/capture.ts";
 import { captureChatImage, listChats, readChat } from "./operations/chat.ts";
@@ -10,7 +11,7 @@ import { compareChatWindows } from "./operations/chat-diff.ts";
 import { chatHistory } from "./operations/chat-history.ts";
 import { sendChatImage } from "./operations/chat-image.ts";
 import { sendCommentImage } from "./operations/comment-image.ts";
-import { closeComments, commentVoice, listComments, listReplies } from "./operations/comments.ts";
+import { closeComments, commentVoice, knownVoices, listComments, listReplies } from "./operations/comments.ts";
 import { inspectCreator } from "./operations/creator.ts";
 import { digest } from "./operations/digest.ts";
 import { pageFactsRead } from "./operations/facts.ts";
@@ -39,9 +40,11 @@ import { checkGoalQuota, pauseState } from "./operations/social.ts";
 import { sourceCheckout } from "./operations/source.ts";
 import { type Input, isWrite, validate } from "./operations/validate.ts";
 import { transcribeVoices } from "./operations/voice.ts";
+import { voiceMemoryText } from "./operations/voice-memory.ts";
 import { write } from "./operations/write.ts";
 import { quiet, type Reproduce } from "./progress.ts";
 import { type BrowserConfig, Store } from "./store.ts";
+import type { VoiceProfile } from "./voice.ts";
 
 export type { Input } from "./operations/validate.ts";
 export { isWrite, resourceID, validate } from "./operations/validate.ts";
@@ -432,8 +435,42 @@ export class App {
 				});
 			case "comment.list":
 				return listComments(session, input, signal);
-			case "comment.voice":
-				return commentVoice(session, input, signal);
+			case "comment.voice": {
+				// No browse target means the caller is asking what has been learned,
+				// which needs no page at all.
+				// Measuring and recalling are different questions, so they are
+				// different calls rather than one guessed from an empty flag: with
+				// --known the caller asks what past sections looked like, and without
+				// it the current work is measured.
+				if (input.known) {
+					const known = new Knowledge(this.store.base);
+					const memories = (await known.execute("memory.list", {})) as Memory[];
+					return knownVoices(memories);
+				}
+				const measured = (await commentVoice(session, input, signal)) as {
+					video_id: string | null;
+					sampled: number;
+					profile: VoiceProfile;
+				};
+				if (!input.write) return measured;
+				const known = new Knowledge(this.store.base);
+				const saved = await known.execute("memory.add", {
+					text: voiceMemoryText({
+						video_id: measured.video_id ?? "",
+						profile: measured.profile,
+						sampled: measured.sampled,
+						at: new Date().toISOString(),
+					}),
+					source: `video:${measured.video_id ?? "unknown"}`,
+					layer: "experience",
+					memory_type: "insight",
+					topic: "评论区风格",
+					tags: "voice-profile,comment-style",
+					certainty: "observed",
+					confidence: 0.6,
+				});
+				return { ...measured, saved };
+			}
 			case "comment.replies":
 				return listReplies(session, input, signal);
 			case "comment.close":

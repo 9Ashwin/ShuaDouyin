@@ -864,10 +864,22 @@ export const COMMANDS: CommandSpec[] = [
 		flags: [
 			video,
 			{ key: "limit", name: "--limit <count>", description: "Comments to read (default 20)", type: "number" },
+			{
+				key: "write",
+				name: "--save",
+				description: "Store this profile as an insight memory for later sections",
+				type: "boolean",
+			},
+			{
+				key: "known",
+				name: "--known",
+				description: "Report what saved sections looked like, without reading the page",
+				type: "boolean",
+			},
 		],
 		effect: "navigation",
 		guidance:
-			"Returns length, exclamation habit, repeated openers, direct address, first person and questions, each with the count behind it, plus guidance lines. Measured per work: two sections read minutes apart had a median length of 11 and 28 characters. The profile describes the section, not every reader — writing to the median is a start, not a rule.",
+			"Returns length, exclamation habit, repeated openers, direct address, first person and questions, each with the count behind it, plus guidance lines. Measured per work: two sections read minutes apart had a median length of 11 and 28 characters, so one global style would be wrong for both. --save keeps the measurement so later sections can be compared against it; comment voice with no work reports what has been saved.",
 	},
 	{
 		id: "comment.list",

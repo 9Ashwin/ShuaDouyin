@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Point, Session, Snapshot } from "../browser.ts";
 import { classifyComment } from "../comment-stance.ts";
+import type { Memory } from "../memory/concept.ts";
 import { profileVoice, voiceGuidance } from "../voice.ts";
 import { control, listResults } from "./navigation.ts";
 import type { Input } from "./validate.ts";
+import { shapeOf, summarise, voiceMemories } from "./voice-memory.ts";
 
 // Public comment reads. The page reports loaded rows only, never a full history.
 
@@ -51,12 +53,38 @@ export async function commentVoice(session: Session, input: Input, signal: Abort
 		sampled: samples.length,
 		complete: listed.complete ?? false,
 		profile,
+		shape: shapeOf(profile),
 		guidance: voiceGuidance(profile),
 		scope: "loaded_comments_of_this_work",
 		limitations: [
 			"Measured from the comments this page had loaded, not from every comment on the work.",
 			"A profile describes the section, not every reader in it. Writing to the median is a start, not a rule.",
 			"Imitating a section is a style choice; it does not make a comment worth reading.",
+		],
+	};
+}
+
+// What previous sections looked like. Reading a new one without this means
+// measuring from nothing every time; the list is what turns one measurement
+// into a habit.
+export function knownVoices(memories: Memory[]): unknown {
+	const records = voiceMemories(memories);
+	const summary = summarise(records);
+	return {
+		...summary,
+		recent: records
+			.sort((left, right) => right.at.localeCompare(left.at))
+			.slice(0, 10)
+			.map((record) => ({
+				video_id: record.video_id,
+				at: record.at,
+				shape: shapeOf(record.profile),
+				median: record.profile.length.median,
+			})),
+		scope: "stored_voice_profiles",
+		limitations: [
+			"Counts only the sections this bot has saved with comment voice --save.",
+			"A shape is a summary of style, not a judgement about the work or its audience.",
 		],
 	};
 }

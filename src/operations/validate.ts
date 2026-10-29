@@ -56,6 +56,8 @@ export interface Input {
 	index?: number;
 	// Playback position in seconds, for seeking and for sampling a chosen window.
 	position?: number;
+	// Read back what has been learned instead of measuring the current page.
+	known?: boolean;
 	offset?: number;
 	timezone?: string;
 	pixels?: number;
