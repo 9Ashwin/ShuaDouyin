@@ -29,7 +29,6 @@ export async function listComments(session: Session, input: Input, signal: Abort
 	// with the label instead of having to trust it.
 	return {
 		...result,
-		source: "page",
 		items: result.items.map((item) => {
 			const text = typeof item.text === "string" ? item.text : "";
 			const classified = classifyComment(text);

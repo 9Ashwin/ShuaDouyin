@@ -120,7 +120,6 @@ dy user follow --value true|false
 
 ```bash
 dy comment list [--limit --scrolls]              # 读，带 stance
-dy comment list --from-cache                     # 读上次会话缓存过的，不开 Chrome
 dy comment replies --comment-id <id>             # 展开某条评论的回复
 dy comment post --text "…"                       # 发顶层评论
 dy comment reply --comment-id <id> --text "…"    # 回复某条评论
@@ -133,8 +132,6 @@ dy comment close                                 # 关掉评论面板
 ```
 
 发表评论必须带 `--request-id`（全局参数）。`comment list` 的每条都带 `stance`：`about_work` / `about_self` / `asking` / `spam` / `unknown`。回之前看它，对着「在说自己」的评论夸「唱得好」是错位的。
-
-`--from-cache` 是另一条路：不开 Chrome，直接从 `~/.dy/chrome` 的磁盘缓存里读这个作品上一次抓到的评论。返回里 `scope` 是 `chrome_cache`，`cache_age_seconds` 是快照多旧，`mine` 是 `null`（缓存里没有登录身份，答不了「是不是自己发的」）。只覆盖这个号之前打开过的作品，没有就报 `not_found`。想知道现在评论区什么样还得读页面。
 
 `comment list` 自己开的面板会自己关，所以读完能直接 `feed next`。如果面板是你手动开的、或者关不掉，用 `dy comment close`。**面板挡着翻页箭头时 `feed next` 会报「The feed did not move」**，不是页面坏了。
 

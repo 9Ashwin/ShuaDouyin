@@ -94,16 +94,6 @@ const value: Flag = {
 	type: "boolean-value",
 	default: true,
 };
-// Reads that can answer from the previous session's Chrome cache. Off by
-// default: a snapshot taken minutes or hours ago is a different answer from the
-// page now, and nothing should be handed one without asking.
-const fromCache: Flag = {
-	key: "from_cache",
-	name: "--from-cache",
-	description: "Read the previous session's cached response instead of the live page",
-	type: "boolean",
-	default: false,
-};
 const paging: Flag[] = [
 	{ key: "limit", name: "--limit <count>", description: "Maximum returned records", type: "number", default: 20 },
 	{
@@ -924,10 +914,10 @@ export const COMMANDS: CommandSpec[] = [
 	{
 		id: "comment.list",
 		description: "Read loaded public comments with stable IDs",
-		flags: [video, ...paging, fromCache],
+		flags: [video, ...paging],
 		effect: "navigation",
 		guidance:
-			"scope=loaded_dom and complete=false indicate that this is a bounded page view, not the full comment history. With --from-cache it returns what an earlier session fetched for this work, reports cache_age_seconds, and sets mine to null because the cache carries no signed-in identity; Chrome does not need to be running.",
+			"scope=loaded_dom and complete=false indicate that this is a bounded page view, not the full comment history.",
 	},
 	{
 		id: "comment.replies",
