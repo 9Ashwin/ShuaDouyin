@@ -26,8 +26,17 @@ async function setup(t: { after: (fn: () => Promise<void>) => void }) {
 	return { base, workspaces: new Workspaces(base) };
 }
 
-const comments = (texts: string[]) =>
-	texts.map((text) => ({ operation: "comment.post", bot_id: "default", data: { text } }));
+// Comments spread across days by default: a voice is what stays the same across
+// days, so the section waits for writing that spans more than one session.
+const comments = (texts: string[], spanDays = 3) =>
+	texts.map((text, index) => ({
+		operation: "comment.post",
+		bot_id: "default",
+		at: new Date(
+			Date.parse("2026-01-01T00:00:00.000Z") + index * (spanDays / Math.max(1, texts.length)) * 86_400_000,
+		).toISOString(),
+		data: { text },
+	}));
 
 test("only the named section is replaced, the owner's text is carried through", () => {
 	// This is the property that makes an automatic rewrite acceptable: a persona
@@ -201,4 +210,32 @@ test("versions only increase and a rollback keeps what it replaced", async (t) =
 test("rolling back to a version that was never kept is a refusal", async (t) => {
 	const { workspaces } = await setup(t);
 	await assert.rejects(workspaces.rollback("AGENTS.md", 99), { code: "not_found" });
+});
+
+test("one sitting is not a voice, however many comments it holds", async (t) => {
+	// Five comments written in one evening describe one mood. Rewriting the
+	// persona after every round would make it swing with whichever hour the
+	// account happened to write in — drift, not growth.
+	const { workspaces } = await setup(t);
+	const sameSession = ["一", "二", "三", "四", "五"].map((text) => ({
+		operation: "comment.post",
+		at: "2026-01-01T00:30:00.000Z",
+		data: { text },
+	}));
+	await assert.rejects(evolvePersona(workspaces, { events: async () => sameSession }), { code: "not_found" });
+	// The same count spread over days is a voice and is accepted.
+	const spread = comments(["一", "二", "三", "四", "五"], 4);
+	assert.equal((await evolvePersona(workspaces, { events: async () => spread })).changed, true);
+});
+
+test("a missing timestamp does not make one session look like a long history", async () => {
+	// Old events may carry no time at all; treating that as day zero would pass
+	// the span check on a single sitting.
+	const { writtenComments } = await import("../src/operations/persona-evolve.ts");
+	const withoutTime = writtenComments([
+		{ operation: "comment.post", data: { text: "a" } },
+		{ operation: "comment.post", data: { text: "b" } },
+	]);
+	assert.equal(withoutTime.length, 2);
+	assert.equal(withoutTime[0]?.at, "");
 });

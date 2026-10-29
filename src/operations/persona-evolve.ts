@@ -44,6 +44,8 @@ export const SECTION = "## 长出来的声音";
 const MAX_SAMPLES = 40;
 // Below this, a section would describe one comment rather than a voice.
 const MIN_SAMPLES = 5;
+// The shortest span that can distinguish a voice from a mood.
+const MIN_SPAN_DAYS = 2;
 
 // One line per measurement, so a reader can check the rule against the number
 // rather than take the sentence on trust.
@@ -103,7 +105,8 @@ export async function evolvePersona(
 	store: { events: () => Promise<unknown[]> },
 	options: { write?: boolean } = {},
 ): Promise<PersonaEvolution> {
-	const sent = eventsAsComments(await store.events());
+	const written = writtenComments(await store.events());
+	const sent = written.map((comment) => comment.text);
 	// One comment is an incident, not a habit. Writing a persona section from a
 	// single sentence would turn whatever that one comment happened to look like
 	// into a rule, and the section would then describe the account to itself
@@ -114,6 +117,17 @@ export async function evolvePersona(
 			details: { samples: sent.length, required: MIN_SAMPLES },
 		});
 	const samples = sent.slice(-MAX_SAMPLES).map((text) => ({ text }));
+	// Enough comments is not the same as enough time. Five comments written in one
+	// sitting describe one mood, and rewriting the persona after every round would
+	// make it swing with whatever the account happened to feel that hour — which is
+	// drift, not growth. A voice is what survives across days, so the section waits
+	// for writing that spans more than one.
+	const span = spanOf(written);
+	if (span !== null && span < MIN_SPAN_DAYS)
+		throw new CliError("not_found", "This writing all comes from the same session", {
+			hint: `${sent.length} comments spanning ${span} day(s). A voice is what stays the same across days; ${MIN_SPAN_DAYS} days is the shortest span that can show it.`,
+			details: { samples: sent.length, span_days: span, required_days: MIN_SPAN_DAYS },
+		});
 	const profile = profileVoice(samples);
 	const derived = deriveVoice(profile);
 	// A run with nothing to say must not blank the section: an unchanged rule set
@@ -161,19 +175,41 @@ export async function evolvePersona(
 // The account's own words, from the same event log the rest of the tool audits
 // against. A comment that was never confirmed is not evidence of how this account
 // writes, so only operation events carrying text count.
-export function eventsAsComments(events: unknown[]): string[] {
-	const out: string[] = [];
+export interface WrittenComment {
+	text: string;
+	at: string;
+}
+
+export function writtenComments(events: unknown[]): WrittenComment[] {
+	const out: WrittenComment[] = [];
 	for (const event of events) {
 		if (!event || typeof event !== "object") continue;
-		const record = event as { operation?: unknown; data?: unknown; bot_id?: unknown };
+		const record = event as { operation?: unknown; data?: unknown; at?: unknown };
 		if (record.operation !== "comment.post" && record.operation !== "comment.reply") continue;
 		const data = record.data as { text?: unknown } | undefined;
 		const text = typeof data?.text === "string" ? data.text.trim() : "";
 		// The reply text lives under `text` on a saved write; a comment that was
 		// only an image has none and would measure as an empty sample.
-		if (text) out.push(text);
+		if (!text) continue;
+		out.push({ text, at: typeof record.at === "string" ? record.at : "" });
 	}
 	return out;
+}
+
+// The text alone, for callers that only measure what was written.
+export function eventsAsComments(events: unknown[]): string[] {
+	return writtenComments(events).map((comment) => comment.text);
+}
+
+// How many whole days the writing spans. A missing or unparseable timestamp is
+// treated as no information rather than as day zero, so old events without one
+// do not make a single session look like a long history.
+function spanOf(comments: WrittenComment[]): number | null {
+	const times = comments
+		.map((comment) => Date.parse(comment.at))
+		.filter((value) => Number.isFinite(value) && value > 0);
+	if (times.length < 2) return null;
+	return Math.floor((Math.max(...times) - Math.min(...times)) / 86_400_000);
 }
 
 // Read the persona without changing it, for a caller that only wants to know
