@@ -656,6 +656,26 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			});
 			return point(row, args.token);
 		}
+		case "comment.close-point": {
+			// The panel's X has no role, label or stable class. What is stable is
+			// its position: on the tab strip's own row, just past the strip's right
+			// edge, and it is the first svg there that is not the tab list itself.
+			const strip = [...document.querySelectorAll(".semi-tabs-bar")].find(
+				(element) => element.getBoundingClientRect().width > 100,
+			);
+			if (!strip) return {};
+			const box = strip.getBoundingClientRect();
+			const y = box.top + box.height / 2;
+			for (let x = box.right; x < box.right + 60; x += 3) {
+				const hit = document.elementFromPoint(x, y);
+				const svg = hit?.closest("svg") ?? (hit?.tagName === "svg" ? hit : null);
+				if (!svg) continue;
+				const rect = svg.getBoundingClientRect();
+				if (rect.width < 8 || rect.height < 8) continue;
+				return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+			}
+			return {};
+		}
 		case "arm-comment-open": {
 			// The caller clicks through a locator that waits for the control to
 			// settle, so this only installs the guard and marks the target. It is

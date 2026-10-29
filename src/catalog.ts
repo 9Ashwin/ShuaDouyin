@@ -810,6 +810,13 @@ export const COMMANDS: CommandSpec[] = [
 			"Captures only a browser video audio track. Transcription belongs to the caller. Some videos expose no capturable audio track.",
 	},
 	{
+		id: "comment.close",
+		description: "Close the comment panel that covers the feed arrows",
+		effect: "navigation",
+		guidance:
+			"comment list opens the panel and leaves it open. The panel covers the right edge of the player, so feed next fails with 'the feed did not move' until it is closed. Safe to run when nothing is open.",
+	},
+	{
 		id: "comment.list",
 		description: "Read loaded public comments with stable IDs",
 		flags: [video, ...paging],

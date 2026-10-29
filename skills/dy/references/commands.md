@@ -116,9 +116,12 @@ dy comment replies --comment-id <id>             # 展开某条评论的回复
 dy comment post --text "…"                       # 发顶层评论
 dy comment reply --comment-id <id> --text "…"    # 回复某条评论
 dy comment image --image <路径>                  # 发图片评论
+dy comment close                                 # 关掉评论面板
 ```
 
 发表评论必须带 `--request-id`（全局参数）。`comment list` 的每条都带 `stance`：`about_work` / `about_self` / `asking` / `spam` / `unknown`。回之前看它，对着「在说自己」的评论夸「唱得好」是错位的。
+
+`comment list` 自己开的面板会自己关，所以读完能直接 `feed next`。如果面板是你手动开的、或者关不掉，用 `dy comment close`。**面板挡着翻页箭头时 `feed next` 会报「The feed did not move」**，不是页面坏了。
 
 ## 私信
 

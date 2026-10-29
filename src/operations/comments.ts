@@ -10,8 +10,15 @@ import type { Input } from "./validate.ts";
 export async function listComments(session: Session, input: Input, signal: AbortSignal): Promise<unknown> {
 	const state = await session.call<Snapshot>("video.info", input);
 	input.video_id = state.video?.id ?? state.note?.id ?? undefined;
+	const wasOpen = await panelVisible(session);
 	await openComments(session, input, signal);
 	const result = (await listResults(session, "comment.list", input, signal)) as { items?: Record<string, unknown>[] };
+	// A read closes what it opened. The panel covers the right edge of the player,
+	// which is where the feed arrows are, so leaving it up made the next
+	// feed next fail with "the feed did not move" — reading comments and then
+	// paging was impossible without reloading. A panel the caller already had
+	// open is theirs and stays.
+	if (!wasOpen) await closeComments(session, signal);
 	if (!result.items) return result;
 	// Each comment is labelled by what it is doing, not just what it says. The
 	// verdict comes with the evidence that produced it, so a reader can disagree
@@ -32,6 +39,31 @@ export async function listComments(session: Session, input: Input, signal: Abort
 // waits for the element to be actionable and retries, which is the behaviour
 // this needs; the page guard is armed first so the click still fails closed if
 // the work changed underneath.
+// Whether the comment panel is actually showing. Counting rows is wrong: a panel
+// that was closed keeps its rows in the document, hidden, so a count said the
+// panel was open when it was not — and said it stayed open after closing. Only
+// layout decides.
+async function panelVisible(session: Session): Promise<boolean> {
+	const visible = await session.tab
+		.locator('[data-e2e="comment-item"]')
+		.filter({ visible: true })
+		.count()
+		.catch(() => 0);
+	return visible > 0;
+}
+
+// Closing is the panel's own X. It is the second svg to the right of the tab
+// strip, and it has no role, label or stable class, so it is found by position:
+// the tab strip's right edge plus a few pixels, on the strip's own row.
+export async function closeComments(session: Session, signal: AbortSignal): Promise<boolean> {
+	if (!(await panelVisible(session))) return true;
+	const point = await session.call<Point>("comment.close-point", {});
+	if (point.x === undefined || point.y === undefined) return false;
+	await session.tab.mouse.click(point.x, point.y);
+	await delay(300, undefined, { signal });
+	return !(await panelVisible(session));
+}
+
 export async function openComments(session: Session, input: Input, signal: AbortSignal): Promise<void> {
 	// The rail is not in the DOM until the work has rendered, and arming a control
 	// that does not exist yet fails before the locator can wait for it. Waiting
@@ -39,7 +71,7 @@ export async function openComments(session: Session, input: Input, signal: Abort
 	// A work page renders its comment list without any toggle: the rows and the
 	// composer are already in the document, just far below the fold. Waiting for
 	// an icon there would time out on a panel that is already open.
-	const rows = await session.tab.locator('[data-e2e="comment-item"]').count();
+	const rows = (await panelVisible(session)) ? 1 : 0;
 	if (rows === 0) {
 		await session.tab
 			.locator(

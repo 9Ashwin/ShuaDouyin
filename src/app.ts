@@ -10,7 +10,7 @@ import { compareChatWindows } from "./operations/chat-diff.ts";
 import { chatHistory } from "./operations/chat-history.ts";
 import { sendChatImage } from "./operations/chat-image.ts";
 import { sendCommentImage } from "./operations/comment-image.ts";
-import { listComments, listReplies } from "./operations/comments.ts";
+import { closeComments, listComments, listReplies } from "./operations/comments.ts";
 import { inspectCreator } from "./operations/creator.ts";
 import { pageFactsRead } from "./operations/facts.ts";
 import { readImage } from "./operations/image-file.ts";
@@ -427,6 +427,12 @@ export class App {
 				return listComments(session, input, signal);
 			case "comment.replies":
 				return listReplies(session, input, signal);
+			case "comment.close":
+				// The panel covers the right edge of the player, which is where the
+				// feed arrows live. Leaving it open made the next feed.next fail with
+				// "the feed did not move", so reading comments and then paging was
+				// impossible without reloading the page.
+				return { closed: await closeComments(session, signal) };
 			case "chat.list":
 				return listChats(session);
 			case "chat.close":
