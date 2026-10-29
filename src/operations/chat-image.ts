@@ -187,8 +187,11 @@ export async function sendChatImage(
 			// The stage alone does not say why: a failure before the click and one
 			// after it read the same. Recording the cause beside the stage is what
 			// makes the next investigation possible.
-			if (receipt) {
-				receipt.uncertainty_reason = error instanceof CliError ? `failed_${error.code}` : "failed_internal";
+			if (receipt && !receipt.uncertainty_reason) {
+				// The message is kept as well as the code: the code alone cannot say
+				// which of several identity checks refused.
+				const detail = error instanceof Error ? error.message : "";
+				receipt.uncertainty_reason = `${error instanceof CliError ? error.code : "internal"}: ${detail}`.slice(0, 240);
 				receipt.updated_at = new Date().toISOString();
 				await store.saveReceipt(receipt).catch(() => undefined);
 			}

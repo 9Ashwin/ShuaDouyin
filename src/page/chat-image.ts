@@ -1,4 +1,4 @@
-import { clean, editorHasDraft, fail, find, one, own, point, scalarID } from "./dom.ts";
+import { clean, editorHasDraft, fail, find, inherited, one, own, point, scalarID } from "./dom.ts";
 import { installGuard } from "./interactions.ts";
 import { chatRoot, readChat } from "./readers.ts";
 
@@ -192,7 +192,10 @@ function modalConversation(dialog: HTMLElement, expected: string) {
 	for (let depth = 0; fiber && depth < 40; depth++) {
 		const identity = own(own(fiber, "memoizedProps"), "curConversation");
 		for (const field of fields) {
-			const id = scalarID(own(identity, field));
+			// The conversation record keeps its ids on the prototype, so reading own
+			// properties found nothing for a group and the confirmation dialog was
+			// refused as a different recipient — after a successful upload.
+			const id = scalarID(inherited(identity, field));
 			if (id) ids.add(id);
 		}
 		fiber = own(fiber, "return");
@@ -216,9 +219,9 @@ export async function prepareChatImageConfirmation(
 	const marks = imageMarks(token);
 	if (uploadGuard) {
 		if (!uploadGuard.accepted || uploadGuard.blocked || uploadGuard.expired || uploadGuard.interfered)
-			fail("identity_mismatch", "Image upload witness is unavailable");
+			fail("identity_mismatch", "A1 upload witness unavailable");
 	} else if (!marks?.accepted || marks.blocked) {
-		fail("identity_mismatch", "Image upload witness is unavailable");
+		fail("identity_mismatch", "A1 upload witness unavailable");
 	}
 	const chat = readChat(conversation);
 	const dialog = one(
@@ -228,7 +231,7 @@ export async function prepareChatImageConfirmation(
 	modalConversation(dialog, conversation);
 	const receiver = one(find(dialog, '[class*="MsgInputSendFileModalreceiver"]'), "image confirmation recipient");
 	if (!chat.name || clean(receiver.textContent) !== `发送给 ${chat.name}`)
-		fail("identity_mismatch", "Image confirmation recipient does not match the open conversation");
+		fail("identity_mismatch", "A2 recipient mismatch");
 	const preview = one(
 		find<HTMLImageElement>(dialog, '[class*="MsgInputSendFileModalitemIconInner"]'),
 		"image confirmation preview",
@@ -239,18 +242,18 @@ export async function prepareChatImageConfirmation(
 		fail("draft_conflict", "Image confirmation differs from the requested image or contains text");
 	const source = preview.currentSrc || preview.src;
 	if (!/^data:image\/(?:png|jpeg|gif);base64,/i.test(source) || source.length > 14_000_000)
-		fail("identity_mismatch", "Image preview cannot be verified locally");
+		fail("identity_mismatch", "A3 preview unverifiable");
 	let data: ArrayBuffer;
 	try {
 		data = await (await fetch(source)).arrayBuffer();
 	} catch {
-		fail("identity_mismatch", "Image preview cannot be read");
+		fail("identity_mismatch", "A4 preview unreadable");
 	}
-	if (data.byteLength !== expectedSize) fail("identity_mismatch", "Image preview size does not match");
+	if (data.byteLength !== expectedSize) fail("identity_mismatch", "A5 size mismatch");
 	const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", data))]
 		.map((byte) => byte.toString(16).padStart(2, "0"))
 		.join("");
-	if (digest !== expectedSHA256) fail("identity_mismatch", "Image preview does not match the selected file");
+	if (digest !== expectedSHA256) fail("identity_mismatch", "A6 hash mismatch");
 	// A guard that is gone lost its listeners, so the flags are re-read instead of
 	// requiring the object itself. A guard that is present must still match.
 	if (uploadGuard) {
@@ -261,9 +264,9 @@ export async function prepareChatImageConfirmation(
 			uploadGuard.expired ||
 			uploadGuard.interfered
 		)
-			fail("identity_mismatch", "Image upload witness changed while verifying preview");
+			fail("identity_mismatch", "A7 witness changed");
 	} else if (imageMarks(token)?.blocked) {
-		fail("identity_mismatch", "Image upload witness changed while verifying preview");
+		fail("identity_mismatch", "A7 witness changed");
 	}
 	// The confirm button reads 发送（1） when one file is selected — the page counts
 	// the attachments into the label. Requiring exactly "发送" matched nothing and
