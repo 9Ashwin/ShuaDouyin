@@ -1,11 +1,38 @@
 ---
 name: dy
-description: Use the dy CLI to browse Douyin for a user, manage bot persona and people profiles, and turn sourced observations into durable memories and reports.
+description: Browse Douyin with an agent persona and a memory of its own. Read the feed, watch works, comment, follow people, sit in live rooms, and keep what was learned as sourced memories.
+allowed-tools: Bash(dy:*) Bash(npx dy:*)
 ---
 
 # 抖音浏览与 Bot 成长
 
 `dy` 是本地能力工具。当前 agent 负责理解、判断、对话、总结与调度。用 `dy schema` 查看可用命令；尊重用户当前授权和已有账号状态。
+
+## 先确认 dy 装好了
+
+```bash
+dy --version
+```
+
+有版本号就直接用。没有就装：
+
+```bash
+npm install -g github:9Ashwin/ShuaDouyin
+```
+
+安装时会从源码构建一次，几秒。**唯一需要的是本机已有的 Chrome**，不下载浏览器。装完 `dy init` 建工作区，`dy auth login` 扫码登录抖音。
+
+装 skill 到 agent 目录（可选，这样其他 agent 也能读到）：
+
+```bash
+npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
+```
+
+或者用 CLI 自己装：
+
+```bash
+dy skill install
+```
 
 ## 快速开始
 
@@ -19,6 +46,114 @@ dy video info                # 读当前作品
 ```
 
 每一轮对话或任务开始，用 `context show --query <当前问题>` 召回相关记忆；`memory search` 做精确关键词查询。按需加 `--profile-ref` 只看某个人物的上下文。
+
+## 命令
+
+所有命令返回一个 `{ok:true,data}` 信封；失败是 `{ok:false,error}` 加非零退出。`dy schema` 给全部 120+ 命令，`dy <命令> --help` 给单个。
+
+### 刷与看
+
+```bash
+dy feed open                    # 打开推荐流
+dy feed next                    # 下一条；核实 ID 变了才算成功
+dy feed previous
+dy feed sweep --count 10        # 一次走 10 条，返回 id/作者/标题/时长
+```
+
+**`feed sweep` 是读一批的首选。** 一条命令、一次连接，`stopped` 说明为什么停下（`count_reached` / `steps_exhausted` / `feed_stuck`）。它不快多少（每条约 1.2 秒，瓶颈是页面过渡），但一次拿全数据，不用逐条 `video info`。
+
+### 判断一条作品在讲什么
+
+```bash
+dy video digest                     # 标题 + 三个位置的画面 + 评论区摘要
+dy video digest --frames 0          # 只读评论，不采样
+dy video seek --at 120              # 跳到第 120 秒
+dy video observe --at 200 --seconds 4 --frames 2
+```
+
+`digest` 约 3–4 秒。三个位置是 25%/50%/75%，避开开头封面语和结尾求关注。实测一条 4 分钟英语视频，三帧字幕拼起来就是完整观点，比标题信息量大得多。
+
+### 读作品与评论
+
+```bash
+dy video info                   # 当前作品的身份、播放状态、时长
+dy video open <id-or-url>
+dy comment list --limit 20      # 每条带 stance 和 likes
+dy comment replies --comment-id <id>
+dy page scroll --target comments --pixels 600
+```
+
+`comment list` 每条带 `stance`（`about_work` / `about_self` / `asking` / `spam` / `unknown`）和 `likes`。回之前看 stance，对着「在说自己」的评论夸「唱得好」是错位的。
+
+**它自己开的面板会自己关**，所以读完能直接 `feed next`。面板挡着翻页箭头时用 `dy comment close`。
+
+### 学这个区的写法
+
+```bash
+dy comment voice --limit 20     # 中位长度、感叹号习惯、称呼、人称、提问比例
+dy comment voice --save         # 连同句式一起存下来
+dy comment voice --known        # 已经学过的区，按形状归并
+dy comment phrases              # 哪些句式还能用
+dy comment phrases --use "…"    # 记一次使用
+```
+
+**按作品算，不按全局算。** 实测两条视频中位数 11 字和 46 字，差四倍。
+
+`comment voice` 还给每条评论判 `has-wit` / `flat` / `generic-praise`，依据是接话、具体指认、反转三个维度，以及堆砌术语。实测一个区里 247 赞的是「下次一起唱」，150 字堆术语那条只有 2 赞，长度和赞数相关 -0.38。
+
+**句式用三次会自动标成 `spent`**，静默 14 天回来。别反复用同一条。
+
+### 写
+
+```bash
+dy comment post --video-id <id> --text "…" --request-id <唯一ID>
+dy comment reply --video-id <id> --comment-id <id> --text "…" --request-id <唯一ID>
+dy video like --video-id <id> --value true
+dy video favorite --video-id <id> --value true
+dy user follow --user-id <id> --value true
+```
+
+写入必须有 `--request-id`。加 `--progress` 看每一步走到哪，`dispatching` 是分水岭：之前失败什么都没发，之后不可逆。
+
+```bash
+dy --progress --request-id <id> chat send --conversation-id <id> --text "…"
+```
+
+### 直播
+
+```bash
+dy live info                    # 主播、开播状态、能否评论
+dy live chat --limit 20         # 当前加载的弹幕
+dy live say --text "…" --request-id <id>
+dy live gifts                   # 礼物和价格
+dy live gift --name 人气票 --price 1 --request-id <id>
+```
+
+礼物会花真钱，`--name` 和 `--price` 必须同时匹配。
+
+### 记忆
+
+```bash
+dy memory add --text "…" --source "user:…" --layer … --certainty …
+dy memory search <词>
+dy memory list
+dy memory candidates --text-file <文件>
+dy memory decide --text-file <文件> --apply --request-id <id>
+dy context show --query "…"
+```
+
+### 起步与检查
+
+```bash
+dy init                         # 建工作区
+dy onboarding show              # 读引导状态
+dy auth login                   # 扫码登录（有头 Chrome）
+dy auth status
+dy browser start / stop / status
+dy diagnostics                  # 反复失败的命令
+dy skill install                # 装 skill 到 agent 目录
+dy guide                        # 这份文档的完整内容
+```
 
 ## 按任务读参考
 

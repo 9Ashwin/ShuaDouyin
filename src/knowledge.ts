@@ -510,7 +510,11 @@ export class Knowledge {
 // an agent would actually read, so the references are appended rather than left
 // for the caller to discover by browsing the repository.
 async function skillMarkdown(): Promise<string> {
-	const entry = await readFile(new URL("../skills/dy/SKILL.md", import.meta.url), "utf8");
+	const raw = await readFile(new URL("../skills/dy/SKILL.md", import.meta.url), "utf8");
+	// The frontmatter is for a skill loader: name, description and allowed-tools
+	// tell the agent platform what this is. An agent reading the assembled guide
+	// does not need it, and `allowed-tools` in particular is not prose.
+	const entry = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
 	const directory = new URL("../skills/dy/references/", import.meta.url);
 	let names: string[];
 	try {
