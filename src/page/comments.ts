@@ -46,7 +46,16 @@ export function commentAuthor(target: string): { found: boolean; author_id: stri
 export function pageTowardComment(id: string): { present: boolean; moved: boolean } {
 	const present = findRendered(document, '[data-e2e="comment-item"]').some((element) => commentID(element) === id);
 	if (present) return { present: true, moved: false };
-	const root = document.scrollingElement ?? document.documentElement;
+	// The comment list has its own scroller. Scrolling the document instead moved
+	// the whole feed slide out of the viewport, which turned the recommend feed
+	// into the work's detail view — after that there were no feed arrows left, and
+	// `feed next` reported "expected one feed navigation control, found 0" for
+	// every command after a reply.
+	const list = document.querySelector('[data-e2e="comment-list"]');
+	const scroller = list
+		? [...list.querySelectorAll("*")].find((element) => element.scrollHeight > element.clientHeight + 4)
+		: null;
+	const root = scroller ?? document.scrollingElement ?? document.documentElement;
 	const before = root.scrollTop;
 	root.scrollBy(0, Math.max(400, root.clientHeight * 0.8));
 	return { present: false, moved: root.scrollTop !== before };

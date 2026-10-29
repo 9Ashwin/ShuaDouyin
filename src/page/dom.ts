@@ -126,7 +126,12 @@ export function videoID(value: string): string | null {
 export function editorText(editor: HTMLElement): string {
 	const text =
 		editor instanceof HTMLTextAreaElement || editor instanceof HTMLInputElement ? editor.value : editor.innerText;
-	return text.replace(/\r\n/g, "\n");
+	// The rich-text editor ends each block with a zero-width sentinel, and its
+	// innerText carries it. Comparison with the requested text was therefore
+	// never equal on a comment — every reply failed with "filled text differs
+	// from requested text" while the composer visibly held exactly the right
+	// sentence. editorHasDraft already stripped these; this did not.
+	return text.replace(/[​﻿]/g, "").replace(/\r\n/g, "\n");
 }
 
 // A chosen @ is not plain text, and the page spells it differently in the
