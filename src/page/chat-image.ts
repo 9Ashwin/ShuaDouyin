@@ -177,7 +177,11 @@ function modalConversation(dialog: HTMLElement, expected: string) {
 		fields = ["_toParticipantSecUserId"];
 		value = expected.slice("secuid:".length);
 	} else if (expected.startsWith("native:")) {
-		fields = ["conversationId", "conversationShortId"];
+		// A group's record keeps its id as plain `id`/`shortId`; only a direct chat
+		// uses the conversation-prefixed names. Looking for those two alone found
+		// nothing on a group, so the confirmation dialog was refused as a different
+		// recipient after the upload had already succeeded.
+		fields = ["id", "shortId", "conversationId", "conversationShortId"];
 		value = expected.slice("native:".length);
 	} else {
 		const match = /^rendered:(conversationId|conversationShortId|groupId|secUid|userId):(.+)$/.exec(expected);
