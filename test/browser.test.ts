@@ -1040,6 +1040,10 @@ test(
 				preview_verified: true,
 				confirm_dispatched: true,
 				dialog_closed: true,
+				// The fixture's upload never renders a message row, so nothing new
+				// appears in the conversation and delivery stays unverified — which is
+				// the honest answer, not a failure of the check.
+				new_media: 0,
 				delivery_verified: false,
 			});
 			assert.equal(await witness?.tab.evaluate("window.imageUploads"), 1);

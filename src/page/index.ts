@@ -1,4 +1,5 @@
 import {
+	chatImageBaseline,
 	chatImageConfirmationState,
 	chatImageState,
 	cleanupChatImage,
@@ -416,8 +417,10 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 				args.file_size ?? 0,
 				args.file_sha256 ?? "",
 			);
+		case "chat.image.baseline":
+			return chatImageBaseline(args.conversation_id);
 		case "chat.image.confirm.state":
-			return chatImageConfirmationState(args.conversation_id, args.token);
+			return chatImageConfirmationState(args.conversation_id, args.token, args.baseline);
 		case "chat.image.cleanup":
 			return cleanupChatImage(args.token);
 		case "chat.reply.prepare": {

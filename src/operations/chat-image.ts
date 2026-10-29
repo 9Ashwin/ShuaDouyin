@@ -115,6 +115,11 @@ export async function sendChatImage(
 		receipt.media_stage = "send_attempted";
 		receipt.updated_at = new Date().toISOString();
 		await store.saveReceipt(receipt);
+		// Read the conversation before the click: the row this send produces is
+		// recognised by an image source that was not there a moment ago.
+		const baseline = await session.call<{ media: number; sources: string[] }>("chat.image.baseline", {
+			conversation_id: input.conversation_id,
+		});
 		const beforeSend = await session.call<{ dispatched: boolean; blocked: boolean }>("chat.image.confirm.state", {
 			conversation_id: input.conversation_id,
 			token,
@@ -126,18 +131,45 @@ export async function sendChatImage(
 			throw uncertain(request, receipt);
 		}
 		await send.click({ timeout: 3000 });
-		const result = await session.call<{ dispatched: boolean; blocked: boolean; dialog_closed: boolean }>(
-			"chat.image.confirm.state",
-			{ conversation_id: input.conversation_id, token },
-		);
-		if (result.dispatched) receipt.media_stage = "send_dispatched";
+		// The page renders the new row a moment after the click, so one read is not
+		// evidence of absence. Read until a new image appears or the window closes.
+		let result: { dispatched: boolean; blocked: boolean; dialog_closed: boolean; new_media: number } | undefined;
+		for (let attempt = 0; attempt < 12; attempt++) {
+			const read = await session.call<{
+				dispatched: boolean;
+				blocked: boolean;
+				dialog_closed: boolean;
+				new_media: number;
+			}>("chat.image.confirm.state", {
+				conversation_id: input.conversation_id,
+				token,
+				baseline,
+			});
+			result = read;
+			if (read.new_media > 0) break;
+			await delay(250);
+		}
+		if (!result) throw new CliError("selector_changed", "Image confirmation state was never readable");
+		const settled = result;
+		if (settled.dispatched) receipt.media_stage = "send_dispatched";
+		// A new image in the conversation is the send's own row, which is the
+		// evidence this receipt has been missing. Without it every image send
+		// reported uncertain and the caller had to check by hand.
+		const verified = settled.new_media > 0;
 		receipt.media_observation = {
 			preview_verified: true,
-			confirm_dispatched: result.dispatched,
-			dialog_closed: result.dialog_closed,
-			delivery_verified: false,
+			confirm_dispatched: settled.dispatched,
+			dialog_closed: settled.dialog_closed,
+			new_media: settled.new_media,
+			delivery_verified: verified,
 		};
-		receipt.uncertainty_reason = result.blocked
+		if (verified) {
+			receipt.status = "confirmed";
+			receipt.updated_at = new Date().toISOString();
+			await store.saveReceipt(receipt);
+			return { request_id: request, confirmed: true, changed: true, new_media: settled.new_media };
+		}
+		receipt.uncertainty_reason = settled.blocked
 			? "image_send_guard_blocked_after_attempt"
 			: "image_delivery_unverified";
 		receipt.updated_at = new Date().toISOString();

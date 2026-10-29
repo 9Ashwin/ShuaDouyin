@@ -281,14 +281,32 @@ export async function prepareChatImageConfirmation(
 	return point(button, token);
 }
 
-export function chatImageConfirmationState(conversation: string, token: string) {
+// What the conversation looked like before the send, so the row the send
+// produces can be recognised afterwards. Without a baseline there was no way to
+// tell a new image message from one that was already there, which is why every
+// image send returned uncertain.
+export function chatImageBaseline(conversation: string) {
+	readChat(conversation);
+	const { root } = chatRoot();
+	const media = [...root.querySelectorAll<HTMLImageElement>("img")].map((image) => image.src).filter(Boolean);
+	return { media: media.length, sources: media.slice(-20) };
+}
+
+export function chatImageConfirmationState(conversation: string, token: string, baseline?: { sources: string[] }) {
 	readChat(conversation);
 	const guard = window.__douyinCLIGuard;
 	if (!guard || guard.token !== token) fail("identity_mismatch", "Image confirmation witness changed");
+	const { root } = chatRoot();
+	const now = [...root.querySelectorAll<HTMLImageElement>("img")].map((image) => image.src).filter(Boolean);
+	// A new image source that was not in the baseline is the send's own row. The
+	// page reuses one URL for a repeated image, so a count alone is not enough.
+	const known = new Set(baseline?.sources ?? []);
+	const appeared = baseline ? now.filter((source) => !known.has(source)).length : 0;
 	return {
 		dispatched: guard.state.dispatched,
 		blocked: guard.state.blocked,
 		dialog_closed: find(document, '[role="dialog"] [class*="MsgInputSendFileModalbox"]').length === 0,
+		new_media: appeared,
 	};
 }
 

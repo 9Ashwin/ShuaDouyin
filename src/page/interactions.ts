@@ -46,6 +46,8 @@ export interface Args {
 	price?: number;
 	// Playback position in seconds, for video.seek.
 	at?: number;
+	// What the conversation held before a send, so the new row can be recognised.
+	baseline?: { media: number; sources: string[] };
 	query?: string;
 	group?: number;
 	choice?: number;

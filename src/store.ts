@@ -52,7 +52,11 @@ export interface Receipt {
 		preview_verified: boolean;
 		confirm_dispatched: boolean;
 		dialog_closed: boolean;
-		delivery_verified: false;
+		// True when a new image appeared in the conversation after the click. It
+		// used to be typed `false` because no such evidence was collected, which
+		// made every image send report uncertain by construction.
+		new_media?: number;
+		delivery_verified: boolean;
 	};
 	comment_observation?: { preview_verified: boolean; publish_dispatched: boolean; delivery_verified: false };
 }

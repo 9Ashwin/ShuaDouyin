@@ -865,8 +865,12 @@ export function readChat(expected?: string) {
 			const share = node.querySelector<HTMLElement>(
 				'[data-e2e="shared-video-card"],[class*="MessageItemShareAwemecontainer"]',
 			);
+			// The live class is MessageItemImageImageBox with a capital I after the
+			// prefix; the selectors named a lowercase variant and a "container" that
+			// does not exist, so an image message fell through to "unsupported" and
+			// readChat could not report that anything had been sent.
 			const image = node.querySelector<HTMLElement>(
-				'[data-e2e="message-image"],[class*="MessageItemImagecontainer"],[class*="MessageItemImageimageBox"]',
+				'[data-e2e="message-image"],[class*="MessageItemImageImageBox"],[class*="MessageItemImagecontainer"]',
 			);
 			const voice = node.querySelector<HTMLElement>('[data-e2e="message-voice"],[class*="MessageItemAudio"]');
 			const kind = text
