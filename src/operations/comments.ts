@@ -50,11 +50,27 @@ export async function openComments(session: Session, input: Input, signal: Abort
 		await delay(150, undefined, { signal });
 	}
 	if (rows > 0) return;
-	await session.call("arm-comment-open", { ...input, token: randomUUID() });
-	// Only the marked control is clicked. Listing the page's own selectors beside
-	// the marker would let the locator pick a different icon than the one the
-	// guard armed, and then neither the click nor the guard means anything.
-	await session.tab.locator("[data-douyin-cli-control]").first().click({ timeout: 5000, signal });
+	const token = randomUUID();
+	await session.call("arm-comment-open", { ...input, token });
+	// The click targets this call's token, not the first marked element. The feed
+	// lays out neighbouring slides, so several comment icons carry the attribute
+	// from earlier calls and the DOM-first one is on a slide that is off screen:
+	// clicking it opened nothing, and `comment list` returned zero rows on a work
+	// that visibly had 34. Playwright's own scroll-to-element does not save this,
+	// because the icon that matched was not the icon that was armed.
+	await session.tab.locator(`[data-douyin-cli-control="${token}"]`).first().click({ timeout: 5000, signal });
+	// The click resolves before the panel has rendered, and reading immediately
+	// after it returned zero rows on a work that had 930 comments. Wait for the
+	// rows the caller is about to read. This is only a wait: the icon does open
+	// the panel, so a fallback that pressed the tooltip's "评论 X" shortcut would
+	// toggle a slow panel shut instead of opening it.
+	try {
+		await session.tab.locator('[data-e2e="comment-item"]').first().waitFor({ state: "attached", timeout: 5000 });
+		await delay(200, undefined, { signal });
+	} catch {
+		// No rows rendered. The read below reports what it found rather than this
+		// helper deciding the work has no comments.
+	}
 }
 
 export async function listReplies(session: Session, input: Input, signal: AbortSignal): Promise<unknown> {
