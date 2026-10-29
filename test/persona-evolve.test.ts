@@ -9,10 +9,11 @@ import {
 	deriveVoice,
 	eventsAsComments,
 	evolvePersona,
+	migratePersona,
 	SECTION,
 } from "../src/operations/persona-evolve.ts";
 import { profileVoice } from "../src/voice.ts";
-import { Workspaces } from "../src/workspace.ts";
+import { RETIRED_FIXED_LINE, Workspaces } from "../src/workspace.ts";
 
 // The persona is meant to grow from what the account actually wrote. These tests
 // pin the two properties that make that safe: only the derived section is
@@ -116,4 +117,49 @@ test("the evolved section lands where a caller reads the persona", async (t) => 
 	// The preset text the workspace was created with is still there: the derived
 	// section is added, not substituted for the persona.
 	assert.ok(document.content.includes("## 身份与声音"));
+});
+
+test("the retired fixed-settings line is replaced where it stood", () => {
+	// A workspace created before the persona could grow still says "keep the
+	// owner's settings fixed, do not rewrite the persona" — the opposite of what
+	// the same document now says further down. An agent reading both is told to
+	// grow and never to change, and the concrete older line wins.
+	const old =
+		"# 旧\n\n## 工作区\n\n- 记录事实。\n- 保留用户已固定的设定，不因一次任务改写人格。\n\n## 从零开始\n\n开始。\n";
+	const migrated = migratePersona(old);
+	assert.equal(migrated.changed, true);
+	assert.equal(migrated.placement, "after-workspace");
+	assert.ok(!migrated.after.includes(RETIRED_FIXED_LINE));
+	assert.ok(migrated.after.includes("## 人格会生长"));
+	// The section lands before 从零开始 and after 工作区, which is where the line
+	// it replaced was.
+	assert.ok(migrated.after.indexOf("## 人格会生长") < migrated.after.indexOf("## 从零开始"));
+	assert.ok(migrated.after.indexOf("## 人格会生长") > migrated.after.indexOf("## 工作区"));
+	assert.ok(migrated.after.includes("- 记录事实。"));
+});
+
+test("migrating twice changes nothing the second time", () => {
+	const old = "# 旧\n\n## 工作区\n\n- 保留用户已固定的设定，不因一次任务改写人格。\n";
+	const once = migratePersona(old);
+	const twice = migratePersona(once.after);
+	assert.equal(twice.changed, false);
+	assert.equal(twice.after, once.after);
+});
+
+test("a persona whose owner already replaced the line is left alone", () => {
+	// Someone who rewrote this themselves made a decision; removing their words
+	// would be the tool overruling the owner.
+	const own = "# 我的\n\n## 工作区\n\n- 我说了算，按我的判断来。\n";
+	assert.equal(migratePersona(own).changed, false);
+});
+
+test("a persona that already has the growth section only loses the old line", () => {
+	const both = `# 混合\n\n## 工作区\n\n- 保留用户已固定的设定，不因一次任务改写人格。\n\n## 人格会生长\n\n已经有了。\n`;
+	const migrated = migratePersona(both);
+	assert.equal(migrated.changed, true);
+	assert.equal(migrated.placement, null);
+	assert.ok(!migrated.after.includes(RETIRED_FIXED_LINE));
+	// The existing section is kept as written rather than duplicated or replaced.
+	assert.equal(migrated.after.match(/## 人格会生长/g)?.length, 1);
+	assert.ok(migrated.after.includes("已经有了。"));
 });

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { CliError } from "../errors.ts";
 import { profileVoice, type VoiceProfile } from "../voice.ts";
 import type { Workspaces } from "../workspace.ts";
-import { PRESETS } from "../workspace.ts";
+import { GROWTH_SECTION, PRESETS, RETIRED_FIXED_LINE } from "../workspace.ts";
 
 // A persona that is read from a file and never changes is a costume, not a
 // personality: it stays exactly as it was the day the workspace was created
@@ -188,4 +188,72 @@ export function presetOf(section: string | null): string | null {
 
 export async function readPersonaFile(workspaces: Workspaces): Promise<string> {
 	return readFile(join(workspaces.root(), "AGENTS.md"), "utf8");
+}
+
+export interface Migration {
+	// True when the document was rewritten.
+	changed: boolean;
+	// Which retired line was found, if any.
+	found: string | null;
+	// Where the replacement section was placed: after 工作区, or at the end when
+	// that heading is missing.
+	placement: "after-workspace" | "appended" | null;
+	before: string;
+	after: string;
+}
+
+// Move a workspace created before the persona could grow onto the same words a
+// new one starts with.
+//
+// The line this replaces said the opposite of what the file now says: "keep the
+// owner's fixed settings, do not rewrite the persona". Leaving it in place means
+// an agent reading the persona is told, in the same document, both to grow and
+// never to change — and the older line wins, because it is concrete. Only the
+// exact retired sentence is matched, so a persona whose owner already rewrote
+// that line themselves is left untouched.
+export function migratePersona(content: string): Migration {
+	const unchanged: Migration = { changed: false, found: null, placement: null, before: content, after: content };
+	if (!content.includes(RETIRED_FIXED_LINE)) return unchanged;
+	// Someone who wrote their own replacement keeps it: the old line being gone is
+	// the only thing this removes, and a section that already exists is not
+	// duplicated.
+	const stripped = content.replace(`${RETIRED_FIXED_LINE}\n`, "").replace(RETIRED_FIXED_LINE, "");
+	if (stripped.includes("## 人格会生长")) {
+		return { changed: true, found: RETIRED_FIXED_LINE, placement: null, before: content, after: stripped };
+	}
+	const section = `${GROWTH_SECTION.join("\n")}\n`;
+	// The old line sat at the end of 工作区, so the replacement belongs there too.
+	// Falling back to the end of the file keeps the order a reader expects when the
+	// workspace section has been renamed or removed.
+	const workspace = stripped.indexOf("\n## 工作区");
+	const nextHeading = workspace >= 0 ? stripped.indexOf("\n## ", workspace + 1) : -1;
+	if (nextHeading >= 0) {
+		const before = stripped.slice(0, nextHeading).replace(/\n+$/, "\n");
+		return {
+			changed: true,
+			found: RETIRED_FIXED_LINE,
+			placement: "after-workspace",
+			before: content,
+			after: `${before}\n${section}${stripped.slice(nextHeading + 1)}`,
+		};
+	}
+	const base = stripped.endsWith("\n") ? stripped : `${stripped}\n`;
+	return {
+		changed: true,
+		found: RETIRED_FIXED_LINE,
+		placement: "appended",
+		before: content,
+		after: `${base}\n${section}`,
+	};
+}
+
+export async function migratePersonaDocument(
+	workspaces: Workspaces,
+	options: { write?: boolean } = {},
+): Promise<Migration> {
+	const document = await workspaces.document("AGENTS.md");
+	const migrated = migratePersona(document.content);
+	if (migrated.changed && options.write !== false)
+		await workspaces.setDocument("AGENTS.md", migrated.after, document.revision);
+	return migrated;
 }

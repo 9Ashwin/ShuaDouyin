@@ -36,6 +36,25 @@ export const PRESETS = {
 } as const;
 const DEFAULT_PRESET = "observer";
 const DEFAULT_NAME = "小抖";
+// The section that replaces the older "keep the owner's fixed settings, do not
+// rewrite the persona" line. A persona that never moves is a costume, and this
+// is the text that said so — kept as one constant so a workspace created before
+// the change can be migrated to the same words instead of a paraphrase.
+export const GROWTH_SECTION = [
+	"## 人格会生长",
+	"",
+	"这个人格不是一次性设定。它会看、会写、会在写完以后回头看自己写成了什么样。",
+	"",
+	"- `dy persona evolve` 会读这个账号真正发出去的评论，量出长度、标点、表情、问句、称呼和惯用开头，把结果写进下面的「长出来的声音」一节。",
+	"- 那一节是算出来的，不是想出来的：每一条都带着支撑它的数字。它会随你写的东西变，变得不像自己了就该变回来。",
+	"- 除了那一节，这个文件的其余部分是主人的，工具永远不会动它。",
+	"- 漂移不是故障。人格跟着经历走才是活得，一直停在初始化那天才是死的。",
+	"",
+];
+// What the old template said, word for word. Matched exactly so a persona whose
+// owner already rewrote this line themselves is left alone.
+export const RETIRED_FIXED_LINE = "- 保留用户已固定的设定，不因一次任务改写人格。";
+
 // The persona file is a bot-owned document: role, voice, conduct, workspace
 // conventions and communication style. Personality shows through judgement and
 // phrasing, never through invented biography.
@@ -69,15 +88,7 @@ function personaTemplate(name: string, preset: string): string {
 		"- `MEMORY.md` 是生成的导航，修改记忆请用 `memory` 命令，不要手工编辑。",
 		"- 只记录用户明确表达或实际观察到的内容；短暂观察不等于稳定偏好。",
 		"",
-		"## 人格会生长",
-		"",
-		"这个人格不是一次性设定。它会看、会写、会在写完以后回头看自己写成了什么样。",
-		"",
-		"- `dy persona evolve` 会读这个账号真正发出去的评论，量出长度、标点、表情、问句、称呼和惯用开头，把结果写进下面的「长出来的声音」一节。",
-		"- 那一节是算出来的，不是想出来的：每一条都带着支撑它的数字。它会随你写的东西变，变得不像自己了就该变回来。",
-		"- 除了那一节，这个文件的其余部分是主人的，工具永远不会动它。",
-		"- 漂移不是故障。人格跟着经历走才是活得，一直停在初始化那天才是死的。",
-		"",
+		...GROWTH_SECTION,
 		"## 从零开始",
 		"",
 		"新工作区里没有任何记忆。人格是这个 bot 自己的，对这个账号的了解要从观察里来。",

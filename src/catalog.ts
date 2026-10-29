@@ -246,6 +246,22 @@ export const COMMANDS: CommandSpec[] = [
 		effect: "local",
 	},
 	{
+		id: "persona.migrate",
+		description: "Move a persona created before it could grow onto the current template",
+		flags: [
+			{
+				key: "dry_run",
+				name: "--dry-run",
+				description: "Report what would change without writing it",
+				type: "boolean",
+				default: false,
+			},
+		],
+		guidance:
+			"Replaces the retired line that told the bot to keep the owner's settings fixed and never rewrite the persona. That line contradicts the growth section in the same document, and the older, more concrete line wins, so an agent reading it is told both to grow and never to change. Only the exact retired sentence is matched; a persona whose owner has already rewritten it is left alone. Running it twice changes nothing the second time.",
+		effect: "local",
+	},
+	{
 		id: "persona.evolve",
 		description: "Rewrite the persona's derived voice section from what this account actually wrote",
 		flags: [

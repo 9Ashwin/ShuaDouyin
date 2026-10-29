@@ -23,7 +23,7 @@ import {
 import { chatHistory } from "./operations/chat-history.ts";
 import { acknowledged, diagnostics, splitByFix } from "./operations/diagnostics.ts";
 import { addGoal, discover, pauseGoal } from "./operations/discover.ts";
-import { evolvePersona, personaSection, presetOf } from "./operations/persona-evolve.ts";
+import { evolvePersona, migratePersonaDocument, personaSection, presetOf } from "./operations/persona-evolve.ts";
 import { resetApply, resetPlan } from "./operations/reset.ts";
 import { parseSources, signals } from "./operations/signals.ts";
 import {
@@ -52,7 +52,11 @@ export function knowledgeOperation(operation: string): boolean {
 		operation.startsWith("browse.") ||
 		operation === "diagnostics" ||
 		operation === "diagnostics-ack" ||
-		operation === "persona.evolve" ||
+		// The whole persona group is local: every command in it reads and writes
+		// this workspace and nothing else. Listing one leaf at a time is what left
+		// persona.migrate falling through to the browser dispatcher, where the only
+		// possible answer was "Unknown operation".
+		operation.startsWith("persona.") ||
 		/^(bot|workspace|memory|context|report|onboarding|growth)\./.test(operation)
 	);
 }
@@ -319,6 +323,8 @@ export class Knowledge {
 						),
 					);
 				});
+			case "persona.migrate":
+				return migratePersonaDocument(this.workspaces, { write: !input.dry_run });
 			case "persona.evolve": {
 				// A dry run must not take the write path: it reports what the section
 				// would become, and the same measurement is what the write uses.
