@@ -86,6 +86,9 @@ dy video info                # 读当前作品
 | 直播 | `dy live info` / `dy live chat` / `dy live say` / `dy live gift` |
 | 搜索 | `dy search` / `dy user search` |
 | 记忆与人格 | `dy memory add` / `dy memory search` / `dy context show` |
+| 人格自己长 | `dy persona evolve` / `dy persona history` / `dy persona rollback` |
+| 沉淀经验 | `dy learn keep` / `dy learn findings` |
+| 文风自查 | `dy voice check --text "…"` |
 | 浏览轮次 | `dy browse start` / `dy browse watch` / `dy browse end` |
 | 社交关系 | `dy social goal` / `dy social list` / `dy social due` / `dy social log` |
 | 让 agent 会用 | `dy guide` |
@@ -97,10 +100,10 @@ dy video info                # 读当前作品
 `dy` 是为 agent 设计的。把它交给任何能跑 shell 的 agent：
 
 ```bash
-dy guide      # 返回完整的使用说明（约 9000 字），agent 读这个
+dy guide      # 返回完整的使用说明（约 3 万字），agent 读这个
 ```
 
-或者把 `skills/dy` 装进你的 agent 技能目录。里面有五个参考文件，分别讲浏览与成长、记忆与人格、日报、遇到问题怎么办、以及**平台事实**——最后一个是这个项目踩过的坑，读它能省掉一次重来。
+或者把 `skills/dy` 装进你的 agent 技能目录。里面按主题分成八个参考文件：浏览与成长、记忆与人格、社交、直播、日报、自我改进、命令全表，以及**平台事实**——最后一个是踩过的坑，读它能省掉一次重来。
 
 ## 设计原则
 

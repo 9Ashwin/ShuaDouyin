@@ -25,6 +25,26 @@ function phrase(overrides: Partial<Phrase> = {}): Phrase {
 
 const now = new Date("2026-02-01T00:00:00.000Z");
 
+// A memory as the ledger stores one, so the parser in phraseMemories is what the
+// test exercises rather than a mock of its output.
+function phraseMemory(overrides: { used?: number }) {
+	const value = phrase({ used: overrides.used ?? 0, last_used: null });
+	return {
+		id: "m1",
+		file: "memory/experience/x.md",
+		title: "可用句式",
+		body: [
+			`可用句式（${value.kind}，来自作品 ${value.from_video}，${value.likes} 赞）：`,
+			`「${value.text}」`,
+			`已用 ${value.used} 次。`,
+		].join(""),
+		tags: ["phrase-ledger", "comment-style"],
+		revision: "abc",
+		created_at: value.learned_at,
+		updated_at: value.learned_at,
+	};
+}
+
 test("a phrase used three times is spent rather than offered again", () => {
 	// The whole point of the ledger: reaching for the same line every time is
 	// what makes a bot read as a bot.
@@ -95,4 +115,46 @@ test("comments of near-identical length look like a template", () => {
 	const same = measureSameness(["今天天气真不错", "这首歌听着还行", "刚才那个好厉害"].map((text) => ({ text })));
 	assert.equal(same.length_spread <= same.average_length / 3, true);
 	assert.notEqual(same.verdict, "varied");
+});
+
+test("a send records the use itself, so the count does not depend on a caller remembering", async () => {
+	// The ledger is only worth having if every use is counted. Asking a caller to
+	// run `comment phrases --use` after each send made the count as reliable as
+	// that caller's memory, which is the failure the ledger exists to prevent.
+	const { recordPhraseUse } = await import("../src/operations/comments.ts");
+	const called: { operation: string; input: Record<string, unknown> }[] = [];
+	const known = {
+		execute: async (operation: string, input: Record<string, unknown>) => {
+			called.push({ operation, input });
+			if (operation === "memory.list") return [phraseMemory({ used: 1 })];
+			return { updated: true };
+		},
+	};
+	const result = await recordPhraseUse(known, "下次一起唱", now);
+	assert.equal(result?.used, 2);
+	assert.equal(called[1]?.operation, "memory.update");
+	assert.ok(String(called[1]?.input.text).includes("已用 2 次"));
+});
+
+test("a comment that is not from the ledger is not an error", async () => {
+	// Most comments are not quotes from the ledger, and a send that fails because
+	// nothing matched would make the ledger a gate rather than a record.
+	const { recordPhraseUse } = await import("../src/operations/comments.ts");
+	const known = { execute: async () => [phraseMemory({})] };
+	assert.equal(await recordPhraseUse(known, "这家店我常去", now), null);
+});
+
+test("a ledger entry with nothing to update is refused rather than counted into nothing", async () => {
+	// phraseMemories only returns tagged entries, so an untagged one cannot reach
+	// here; the state that can is a tagged memory whose body no longer parses.
+	// Counting a use into a file that will not be found would lose the record.
+	const { recordPhraseUse } = await import("../src/operations/comments.ts");
+	const orphan = phraseMemory({});
+	const known = {
+		execute: async (operation: string) =>
+			operation === "memory.list"
+				? [{ ...orphan, tags: ["phrase-ledger"], body: orphan.body.replace(`「${phrase().text}」`, "「换过的」") }]
+				: undefined,
+	};
+	assert.equal(await recordPhraseUse(known as never, phrase().text, now), null);
 });

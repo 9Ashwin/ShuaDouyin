@@ -2,10 +2,19 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Point, Session, Snapshot } from "../browser.ts";
 import { classifyComment } from "../comment-stance.ts";
+import { CliError } from "../errors.ts";
 import type { Memory } from "../memory/concept.ts";
 import { measureEngagement, measureWit, profileVoice, voiceGuidance } from "../voice.ts";
 import { control, listResults } from "./navigation.ts";
-import { availablePhrases, candidatePhrase, measureSameness, PHRASE_RULE, phraseMemories } from "./phrases.ts";
+import {
+	availablePhrases,
+	candidatePhrase,
+	measureSameness,
+	PHRASE_RULE,
+	phraseMemories,
+	phraseMemoryText,
+	usePhrase,
+} from "./phrases.ts";
 import type { Input } from "./validate.ts";
 import { shapeOf, summarise, voiceMemories } from "./voice-memory.ts";
 
@@ -85,6 +94,44 @@ export async function commentVoice(session: Session, input: Input, signal: Abort
 			"Imitating a section is a style choice; it does not make a comment worth reading.",
 		],
 	};
+}
+
+// Record that a learned phrase was used, from the send path rather than from a
+// caller remembering to say so.
+//
+// The ledger only works if every use is counted, and asking a caller to run
+// `comment phrases --use` after each send meant the count was as reliable as the
+// caller's memory — which is exactly what a ledger is supposed to replace. A send
+// whose text matches a learned phrase records the use itself. Text that matches
+// nothing is not an error here: most comments are not quotes from the ledger.
+export async function recordPhraseUse(
+	known: { execute: (operation: string, input: Record<string, unknown>) => Promise<unknown> },
+	text: string,
+	now = new Date(),
+): Promise<{ text: string; used: number } | null> {
+	if (!text.trim()) return null;
+	const memories = (await known.execute("memory.list", {})) as Memory[];
+	const found = phraseMemories(memories).find((phrase) => phrase.text === text.trim());
+	if (!found) return null;
+	const target = memories.find(
+		(memory) => memory.tags?.includes("phrase-ledger") && memory.body.includes(`「${found.text}」`),
+	);
+	// The ledger entry is what makes the count durable. A phrase memory without one
+	// is a broken state and is reported rather than silently skipped: treating it
+	// as absent would let the same phrase be reused indefinitely.
+	if (!target) throw new CliError("state_corrupt", "The phrase ledger entry is missing");
+	const updated = usePhrase(found, now);
+	await known.execute("memory.update", {
+		resource: target.id,
+		text: phraseMemoryText(updated),
+		source: `phrase:${found.from_video}`,
+		if_match: target.revision,
+		layer: "experience",
+		memory_type: "insight",
+		topic: "可用句式",
+		tags: "phrase-ledger,comment-style",
+	});
+	return { text: updated.text, used: updated.used };
 }
 
 // Which phrases are available to say right now, and which have been used

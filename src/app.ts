@@ -18,6 +18,7 @@ import {
 	listComments,
 	listReplies,
 	phraseReport,
+	recordPhraseUse,
 	samenessReport,
 } from "./operations/comments.ts";
 import { inspectCreator } from "./operations/creator.ts";
@@ -177,13 +178,31 @@ export class App {
 						await session.close();
 					}
 				}
-				if (isWrite(operation))
-					return write(operation, input, active, {
+				if (isWrite(operation)) {
+					const result = await write(operation, input, active, {
 						store: this.store,
 						chrome: this.chrome,
 						timeout: this.timeout,
 						progress: this.options.progress ?? quiet,
 					});
+					// A confirmed comment is the only moment the ledger stops being
+					// advisory. Counting the use here rather than asking the caller to
+					// run `comment phrases --use` is what makes the count complete:
+					// a caller that forgets is the failure mode the ledger exists for.
+					// A ledger that cannot be updated must not turn a delivered comment
+					// into a failure, so this reports its own trouble instead.
+					if (
+						(operation === "comment.post" || operation === "comment.reply") &&
+						input.text &&
+						result &&
+						typeof result === "object"
+					)
+						return {
+							...result,
+							phrase: await recordPhraseUse(new Knowledge(this.store.base), input.text).catch(() => null),
+						};
+					return result;
+				}
 				const started = performance.now();
 				// A live command reads a tab on the live site; the works tab reports a
 				// different page and would fail every time.
