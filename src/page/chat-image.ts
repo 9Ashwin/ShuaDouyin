@@ -1,4 +1,4 @@
-import { clean, editorHasDraft, fail, find, inherited, one, own, point, scalarID } from "./dom.ts";
+import { clean, editorHasDraft, fail, find, inherited, one, own, point, scalarID, stableId } from "./dom.ts";
 import { installGuard } from "./interactions.ts";
 import { chatRoot, readChat } from "./readers.ts";
 
@@ -193,8 +193,10 @@ function modalConversation(dialog: HTMLElement, expected: string) {
 	if (keys.length !== 1) fail("identity_mismatch", "Image confirmation recipient identity is unavailable");
 	const ids = new Set<string>();
 	let fiber = own(dialog, keys[0]);
+	let record: unknown;
 	for (let depth = 0; fiber && depth < 40; depth++) {
 		const identity = own(own(fiber, "memoizedProps"), "curConversation");
+		if (identity) record = identity;
 		for (const field of fields) {
 			// The conversation record keeps its ids on the prototype, so reading own
 			// properties found nothing for a group and the confirmation dialog was
@@ -203,6 +205,13 @@ function modalConversation(dialog: HTMLElement, expected: string) {
 			if (id) ids.add(id);
 		}
 		fiber = own(fiber, "return");
+	}
+	// The named fields are tried first because they are precise. When they all
+	// come back empty, the record is scanned for whatever the page calls its id
+	// now — that is what a rename costs otherwise.
+	if (ids.size === 0) {
+		const guessed = stableId(record);
+		if (guessed) ids.add(guessed);
 	}
 	if (ids.size !== 1 || !ids.has(value))
 		fail("identity_mismatch", "Image confirmation recipient identity does not match");

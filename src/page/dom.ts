@@ -207,3 +207,58 @@ function sleepSync(ms: number): void {
 		/* wait for the page to finish laying out */
 	}
 }
+
+// A stable id for a page record, without being told which field holds it.
+//
+// The conversation record's ids have moved and been renamed more than once:
+// a direct chat keeps conversationId/conversationShortId, a group keeps plain
+// id/shortId, and the fields live on the prototype rather than the instance.
+// Each rename cost a silent failure, because a lookup by name returns nothing
+// and the caller cannot tell "no id" from "the field is called something else".
+//
+// This scans the record's own prototype chain for values shaped like a platform
+// id and returns the one the whole chain agrees on. Agreement is what makes it
+// safe: a record with two different id-shaped values is refused rather than
+// guessed at.
+export function stableId(record: unknown, preferred: string[] = []): string | null {
+	const found = new Map<string, Set<string>>();
+	let node: object | null = record && typeof record === "object" ? record : null;
+	for (let depth = 0; node && depth < 6; depth++) {
+		for (const key of Object.getOwnPropertyNames(node)) {
+			// `id`-shaped names only: this is a record scan, not a content scan.
+			if (!/(?:^id$|Id$|_id$|ShortId$|GroupId$)/.test(key)) continue;
+			const descriptor = Object.getOwnPropertyDescriptor(node, key);
+			if (!descriptor) continue;
+			let value: unknown;
+			if ("value" in descriptor) value = descriptor.value;
+			else if (typeof descriptor.get === "function") {
+				try {
+					value = descriptor.get.call(record);
+				} catch {
+					continue;
+				}
+			} else continue;
+			const id = scalarID(value);
+			if (!id || !isPlatformId(id)) continue;
+			const set = found.get(key) ?? new Set<string>();
+			set.add(id);
+			found.set(key, set);
+		}
+		node = Object.getPrototypeOf(node) as object | null;
+	}
+	// A name the caller trusts wins when it is unambiguous.
+	for (const key of preferred) {
+		const values = found.get(key);
+		if (values?.size === 1) return [...values][0];
+	}
+	// Otherwise every field that reported must agree on one value.
+	const all = new Set([...found.values()].flatMap((values) => [...values]));
+	return all.size === 1 ? [...all][0] : null;
+}
+
+// A platform id: a bare number, or a colon-joined numeric tuple. Anything
+// shorter than five digits is a count or an index, not an identity.
+function isPlatformId(value: string): boolean {
+	if (/^\d{5,32}$/.test(value)) return true;
+	return /^\d{1,20}(?::\d{1,20}){1,4}$/.test(value);
+}
