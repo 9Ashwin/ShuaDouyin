@@ -924,14 +924,46 @@ export function chatSignature(): string {
 	return JSON.stringify([identity(header, true), header.innerText, root.getAttribute("data-conversation-id")]);
 }
 
+// What must not change between preparing a send and clicking it.
+//
+// This compares the newest end of the conversation and nothing else. The whole
+// loaded window was compared before, and that made a send fail whenever the page
+// loaded more history under the composer — which a real page does for a second or
+// two after a conversation opens. That is why the first send after switching
+// conversations always failed and the second one worked.
+//
+// The newest end answers the only question that matters: did anyone speak while
+// this send was being prepared. Older history arriving is the page doing its job,
+// and image loading is not a message at all.
 export function watermark(): string {
 	const { root } = chatRoot();
-	const media = [
-		...root.querySelectorAll<HTMLImageElement>(
-			'[data-e2e="message-content"] img,[data-e2e="msg-item-content"] img,[data-testid="message-content"] img',
-		),
-	].map((image) => image.currentSrc || image.getAttribute("src"));
-	return JSON.stringify([readChat().messages, media]);
+	// The last message, and how many messages are loaded.
+	//
+	// The count is kept on purpose: it catches a message that arrives and is
+	// replaced before the comparison, which the newest row alone would miss. It
+	// does not punish history loading, because loading older messages does not
+	// change what the newest one is — and a count that grew because history
+	// arrived is not a reason to refuse a send. What would be a reason is the
+	// newest row changing, and that is what the first element answers.
+	const messages = readChat().messages;
+	const newest = messages[0];
+	// Media is only how an image message reads, so it is taken from the row that
+	// decides the comparison: the newest one. Scanning the whole panel pulled in
+	// avatars, which load in whatever order the page reaches them, and inline
+	// base64 placeholders, which are rewritten on every render — either of those
+	// made this differ on a page where nothing had changed. A source is used
+	// without its query because the same asset is signed afresh per render.
+	const newestNode = [
+		...root.querySelectorAll<HTMLElement>('[data-e2e="message-content"],[data-e2e="msg-item-content"]'),
+	][0];
+	const media = newestNode
+		? [...newestNode.querySelectorAll<HTMLImageElement>("img")]
+				.map((image) => image.currentSrc || image.getAttribute("src") || "")
+				.filter((source) => source.startsWith("https://"))
+				.map((source) => source.split("?")[0]?.slice(-64) ?? "")
+				.sort()
+		: [];
+	return JSON.stringify([newest ? [newest.id, newest.timestamp, newest.direction] : null, media]);
 }
 
 export function userIdentity(expected?: string): string {

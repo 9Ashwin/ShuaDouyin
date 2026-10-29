@@ -287,13 +287,12 @@ export async function write(
 			mayHaveDispatched = false;
 			// The guard knows which check refused; without carrying that through,
 			// every refusal read the same and none of them could be acted on.
-			const reason =
-				confirmed && typeof confirmed === "object" && "blocked_reason" in confirmed
-					? String((confirmed as { blocked_reason?: unknown }).blocked_reason ?? "")
-					: "";
+			const fields = confirmed && typeof confirmed === "object" ? (confirmed as Record<string, unknown>) : {};
+			const reason = String(fields.blocked_reason ?? "");
+			const detail = String(fields.blocked_detail ?? "");
 			throw new CliError("identity_mismatch", "Input was blocked because the target or draft changed", {
-				hint: reason ? `The page refused the click: ${reason}` : "",
-				details: reason ? { blocked_reason: reason } : undefined,
+				hint: reason ? `The page refused the click: ${reason} ${detail}`.trim() : "",
+				details: reason ? { blocked_reason: reason, ...(detail ? { blocked_detail: detail } : {}) } : undefined,
 			});
 		}
 		if (!confirmed.result) {

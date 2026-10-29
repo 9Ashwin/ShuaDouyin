@@ -90,8 +90,10 @@ interface Prepared {
 	emoji?: string;
 	dispatched: boolean;
 	blocked: boolean;
-	// Why the guard refused the click, when it did.
+	// Why the guard refused the click, when it did, and what the failing check
+	// saw.
 	reason?: string;
+	reason_detail?: string;
 }
 interface Guard {
 	token: string;
@@ -158,8 +160,13 @@ export function installGuard(
 						? error.message
 						: "";
 			// The witness the caller reads after the click is a different object;
-			// carry the reason across so writeResult can report it.
-			if (window.__douyinCLI && window.__douyinCLI.token === token) window.__douyinCLI.reason = state.reason;
+			// carry both the message and the detail across so writeResult can
+			// report them. detail is where the failing check puts what it saw.
+			if (window.__douyinCLI && window.__douyinCLI.token === token) {
+				window.__douyinCLI.reason = state.reason;
+				window.__douyinCLI.reason_detail =
+					error && typeof error === "object" && "hint" in error ? String((error as { hint?: unknown }).hint ?? "") : "";
+			}
 			event.preventDefault();
 			event.stopImmediatePropagation();
 		}
@@ -466,8 +473,14 @@ export function armWrite(args: Args): Point {
 			if (signature !== state.signature)
 				fail("identity_mismatch", "The open conversation changed before send", JSON.stringify({ signature }));
 			const mark = watermark();
+			// Both sides of the comparison, so a difference names itself instead of
+			// leaving the reader to guess what the baseline had been.
 			if (mark !== state.watermark)
-				fail("identity_mismatch", "Message history changed before send", JSON.stringify({ watermark: mark }));
+				fail(
+					"identity_mismatch",
+					"Message history changed before send",
+					JSON.stringify({ was: state.watermark.slice(0, 220), now: mark.slice(0, 220) }),
+				);
 		} else {
 			guardVideo(args.video_id);
 			if (commentEditor(args.comment_id).editor !== state.editor) fail("identity_mismatch", "Comment composer changed");
@@ -518,7 +531,13 @@ export function writeResult(args: Args) {
 	if (state.token !== args.token)
 		fail("identity_mismatch", "Send witness no longer exists", `expected ${args.token}, found ${state.token}`);
 	if (state.blocked)
-		return { confirmed: false, blocked: true, dispatched: state.dispatched, blocked_reason: state.reason ?? null };
+		return {
+			confirmed: false,
+			blocked: true,
+			dispatched: state.dispatched,
+			blocked_reason: state.reason ?? null,
+			blocked_detail: state.reason_detail ?? null,
+		};
 	const rows = args.action === "chat.send" ? readChat(args.conversation_id).messages : readComments(args.video_id);
 	// A mention is delivered as text too: the row reads "@name text", so the row
 	// this send produced never equals the body alone. Both spellings are

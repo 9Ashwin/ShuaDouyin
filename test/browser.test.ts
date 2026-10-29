@@ -1313,6 +1313,59 @@ test(
 			await witness?.tab.locator('[data-e2e="chat-back"]').evaluate((element) => element.remove());
 		});
 
+		await t.test("older history loading does not refuse a send, a new message does", async () => {
+			// The real page loads history for a second or two after a conversation
+			// opens. Comparing the whole loaded window meant that arriving history
+			// looked exactly like someone speaking, and every first send after
+			// switching conversations was refused. Both halves are checked here so
+			// the fix cannot be "accept everything": a message that really arrives
+			// must still stop the send.
+			const args = { action: "chat.send", conversation_id: "native:30001", text: "历史测试", token: "watermark-check" };
+			const prepared = await witness?.call<{ selector: string }>("prepare-write", args);
+			if (!prepared) throw new Error("Missing chat editor");
+			// arm-write compares the composer against the requested text, so the
+			// fixture has to hold that text before the history change is checked.
+			await witness?.tab.locator(prepared.selector).evaluate((element, text) => {
+				const block = document.createElement("div");
+				const value = document.createElement("span");
+				value.dataset.string = "true";
+				value.dataset.leaf = "true";
+				value.textContent = text;
+				const sentinel = document.createElement("span");
+				sentinel.dataset.string = "true";
+				sentinel.dataset.enter = "true";
+				sentinel.dataset.leaf = "true";
+				sentinel.textContent = "​";
+				block.append(value, sentinel);
+				element.replaceChildren(block);
+			}, args.text);
+			const list = witness?.tab.locator('[data-e2e="message-list"]');
+			await list?.evaluate((element) => {
+				// An older message, prepended below the newest end the way the page
+				// loads it: more rows, newest one untouched.
+				const row = document.createElement("div");
+				row.dataset.e2e = "message-row";
+				row.dataset.messageId = "29990";
+				row.dataset.direction = "incoming";
+				row.innerHTML = '<div data-e2e="message-content"><span data-e2e="message-text">更早的消息</span></div>';
+				element.append(row);
+			});
+			assert.ok(await witness?.call("arm-write", args), "history loading must not refuse the send");
+			await list?.evaluate((element) => {
+				const row = document.createElement("div");
+				row.dataset.e2e = "message-row";
+				row.dataset.messageId = "30999";
+				row.dataset.direction = "incoming";
+				row.innerHTML = '<div data-e2e="message-content"><span data-e2e="message-text">新来的消息</span></div>';
+				element.prepend(row);
+			});
+			await assert.rejects(witness?.call("arm-write", args) ?? Promise.resolve(), { code: "identity_mismatch" });
+			await witness?.tab.locator('[data-e2e="message-list"] [data-message-id="29990"]').evaluate((e) => e.remove());
+			await witness?.tab.locator('[data-e2e="message-list"] [data-message-id="30999"]').evaluate((e) => e.remove());
+			await witness?.tab.locator('[data-e2e="msg-input"] [contenteditable="true"]').fill("");
+			await witness?.call("cleanup");
+		});
+
 		await t.test("chat editor accepts marked placeholders but rejects unmarked changes", async () => {
 			const args = { action: "chat.send", conversation_id: "native:30001", text: "测试消息", token: "sentinel-check" };
 			const prepared = await witness?.call<{ selector: string }>("prepare-write", args);
