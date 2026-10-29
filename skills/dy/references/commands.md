@@ -58,6 +58,22 @@ dy page scroll --pixels 1200
 
 `feed.next` 会核实作品 ID 变了才算成功。读到「当前是直播」不代表命令坏了——见 `platform-facts.md` 的滑片过渡说明。
 
+**一次读一批用 `feed sweep`：**
+
+```bash
+dy feed sweep --count 10            # 走 10 条，返回 id、作者 ID、标题、时长
+```
+
+只读：它翻页并读作品身份，不点赞、不评论、不关注。落在直播或读不到的滑片会计入 `skipped` 而不是悄悄丢掉，所以 `works.length` 小于 `count` 时要知道平台就是没给那么多。
+
+`stopped` 说明为什么停下：
+
+- `count_reached` — 拿够了
+- `steps_exhausted` — 翻到步数上限还没拿够
+- `feed_stuck` — 翻不动了，`error` 里有原因
+
+**耗时预期：**推荐流每次翻页约 1.2 秒（页面本身要过渡），10 条约 12 秒。它不会比逐个 `feed next` 快多少——瓶颈是页面等待，不是命令启动。真正的收益是一次拿到完整数据，不用再逐条 `video info`。
+
 **图文作品和视频作品是两套。** `video info` 会告诉你当前是哪一种。图文（笔记）用：
 
 ```bash

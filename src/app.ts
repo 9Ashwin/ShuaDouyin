@@ -27,6 +27,7 @@ import {
 	openRecommendFeed,
 	searchUsers,
 	settleOnWork,
+	sweepFeed,
 	verifySearchFilters,
 	waitSearchResults,
 	waitSnapshot,
@@ -411,6 +412,12 @@ export class App {
 				// The feed can sit on a live slide, which has no work identity, so the
 				// move is verified against the whole slide rather than a video id.
 				return moveFeed(session, operation, signal);
+			case "feed.sweep":
+				return sweepFeed(session, {
+					count: Math.min(Math.max(1, input.count ?? 10), 100),
+					maxSteps: input.steps,
+					signal,
+				});
 			case "comment.list":
 				return listComments(session, input, signal);
 			case "comment.replies":

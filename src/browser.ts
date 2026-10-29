@@ -33,6 +33,9 @@ export interface Snapshot {
 		url: string | null;
 		title: string;
 		author: string;
+		// The stable identity of the author. `author` is a display name that may be
+		// empty or change; this is what a caller should use.
+		author_id?: string | null;
 		time: number;
 		duration: number | null;
 		paused: boolean;

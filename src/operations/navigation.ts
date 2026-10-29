@@ -110,10 +110,108 @@ export async function openRecommendFeed(session: Session, signal: AbortSignal): 
 // this only moves the feed, and the key comparison below still requires the
 // slide to actually change, so a duplicate press can never be reported as a
 // second move.
+export interface SweptWork {
+	id: string;
+	url: string;
+	author_id: string | null;
+	title: string;
+	duration: number | null;
+}
+
+// Walking the feed one command at a time costs a process and a CDP connection
+// per work, which is most of the wall clock when a caller reads a dozen. This
+// does the walk inside one connection and returns what it saw.
+//
+// It is deliberately a read: it moves the feed and collects identity, and never
+// likes, comments or follows. Slides it cannot read are counted rather than
+// silently dropped, because "10 requested, 6 returned" is the honest answer when
+// the feed served live streams.
+export async function sweepFeed(
+	session: Session,
+	options: { count: number; maxSteps?: number; signal: AbortSignal },
+): Promise<{
+	works: SweptWork[];
+	skipped: { live: number; unreadable: number };
+	steps: number;
+	// Why the walk ended. Without it a short result is indistinguishable from a
+	// feed that stopped moving, and the caller cannot tell whether to re-run.
+	stopped: "count_reached" | "steps_exhausted" | "feed_stuck";
+	error: string | null;
+	step_ms: { step: number; ms: number }[];
+}> {
+	const works: SweptWork[] = [];
+	const skipped = { live: 0, unreadable: 0 };
+	const seen = new Set<string>();
+	const maxSteps = options.maxSteps ?? options.count * 3;
+	let steps = 0;
+	let stopped: "count_reached" | "steps_exhausted" | "feed_stuck" = "count_reached";
+	let error: string | null = null;
+	const step_ms: { step: number; ms: number }[] = [];
+
+	const collect = (state: Snapshot): boolean => {
+		const video = state.video;
+		if (!video?.id) {
+			if (state.slide.kind === "live") skipped.live++;
+			else skipped.unreadable++;
+			return false;
+		}
+		if (seen.has(video.id)) return false;
+		seen.add(video.id);
+		works.push({
+			id: video.id,
+			url: `https://www.douyin.com/video/${video.id}`,
+			author_id: video.author_id ?? null,
+			title: typeof video.title === "string" ? video.title : "",
+			duration: typeof video.duration === "number" ? video.duration : null,
+		});
+		return true;
+	};
+
+	// Sweeping from whatever page happens to be open fails immediately: a detail
+	// page has no feed arrows at all. Open the feed first when it is not already
+	// the current one, and let that failure be the caller's error rather than a
+	// confusing "feed stuck" after a single step.
+	const first = await session.status();
+	if (!first.url?.includes("recommend=1") || first.slide.kind === "page")
+		await openRecommendFeed(session, options.signal);
+	collect(await session.status());
+	while (works.length < options.count && steps < maxSteps) {
+		steps++;
+		const started = Date.now();
+		try {
+			// Most presses land in about 130ms, but roughly one in six does not
+			// move the feed at all. `moveFeed` waits its full 8 seconds before
+			// retrying, which is right for a single caller and wasteful for a
+			// walk: one dead press turned a 10-work sweep into 70 seconds. Here a
+			// short window is enough to tell a slow slide from a missed press, so
+			// each step gets a quick attempt and the retry happens sooner.
+			collect(await moveFeed(session, "feed.next", options.signal, { settle: 800, attempts: 8 }));
+		} catch (caught) {
+			// A slide that refuses to move ends the sweep with what was gathered.
+			// Carrying the error would turn a partial read into no read at all.
+			if (!(caught instanceof CliError) || caught.code !== "selector_changed") throw caught;
+			stopped = "feed_stuck";
+			error = caught.message;
+			break;
+		}
+		step_ms.push({ step: steps, ms: Date.now() - started });
+	}
+	if (works.length >= options.count) stopped = "count_reached";
+	else if (stopped !== "feed_stuck") stopped = "steps_exhausted";
+	// Per-step timings stay in the response while this is measured on the real
+	// page. A caller reading a dozen works cares how long each one cost, and the
+	// total alone hides which step stalled.
+	return { works, skipped, steps, stopped, error, step_ms };
+}
+
 export async function moveFeed(
 	session: Session,
 	name: "feed.next" | "feed.previous",
 	signal: AbortSignal,
+	// How long one attempt waits, and how many presses are granted in total. A
+	// single caller reads a slow page once, so the defaults favour patience; a
+	// sweep presses repeatedly and would rather retry than wait.
+	tuning: { settle?: number; attempts?: number } = {},
 ): Promise<Snapshot> {
 	const before = await session.status();
 	const slideKey = (state: Snapshot) =>
@@ -123,23 +221,28 @@ export async function moveFeed(
 		const now = slideKey(state);
 		return !!now && !!state.slide.id && now !== was;
 	};
+	const settle = tuning.settle ?? 8000;
+	const attempts = tuning.attempts ?? 2;
 	// A live slide swallows the first press and then obeys. That is specific to
 	// live and is why the extra press is granted there. For any other slide a
 	// second press is only allowed when the page is provably still on the work it
 	// started from: pressing again after a move that merely took longer than the
 	// window would skip a work the caller never asked to pass.
-	for (let attempt = 0; attempt < 2; attempt++) {
+	for (let attempt = 0; attempt < attempts; attempt++) {
 		await control(session, name, { video_id: before.video?.id });
 		const live = before.slide.kind === "live";
 		try {
-			return await waitSnapshot(session, moved, signal, live && attempt === 0 ? 2500 : 8000);
+			return await waitSnapshot(session, moved, signal, live && attempt === 0 ? 2500 : settle);
 		} catch (error) {
-			if (attempt !== 0) throw error;
 			if (!(error instanceof CliError) || error.code !== "selector_changed") throw error;
-			if (live) continue;
+			// A short window can expire just before the slide lands. Before treating
+			// that as a missed press — and pressing again, which would skip a work —
+			// read where the page actually is. It moved; report it.
+			const now = await session.status().catch(() => null);
+			if (now && moved(now)) return now;
+			if (attempt === attempts - 1) throw error;
 			// Unmoved is the precondition for pressing again, and it has to be read
 			// from the page rather than assumed from the timeout.
-			const now = await session.status().catch(() => null);
 			if (!now || slideKey(now) !== was) throw error;
 			await delay(250, undefined, { signal });
 		}

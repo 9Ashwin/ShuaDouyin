@@ -648,6 +648,22 @@ export const COMMANDS: CommandSpec[] = [
 	},
 	{ id: "feed.next", description: "Move to the next video and verify that its ID changed", effect: "navigation" },
 	{
+		id: "feed.sweep",
+		description: "Walk several slides in one connection and return what was on them",
+		flags: [
+			{ key: "count", name: "--count <n>", description: "Works to collect (default 10)", type: "number" },
+			{
+				key: "steps",
+				name: "--steps <n>",
+				description: "Most slides to move through (default 3x count)",
+				type: "number",
+			},
+		],
+		effect: "navigation",
+		guidance:
+			"Read-only: it moves the feed and reads identity, and never likes, comments or follows. Live and unreadable slides are counted in skipped, not silently dropped, so works.length below count says what the feed actually served.",
+	},
+	{
 		id: "feed.previous",
 		description: "Move to the previous video and verify that its ID changed",
 		effect: "navigation",
