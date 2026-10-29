@@ -23,6 +23,7 @@ import {
 import { chatHistory } from "./operations/chat-history.ts";
 import { acknowledged, diagnostics, splitByFix } from "./operations/diagnostics.ts";
 import { addGoal, discover, pauseGoal } from "./operations/discover.ts";
+import { keepFindings } from "./operations/learn.ts";
 import { evolvePersona, migratePersonaDocument, personaSection, presetOf } from "./operations/persona-evolve.ts";
 import { resetApply, resetPlan } from "./operations/reset.ts";
 import { parseSources, signals } from "./operations/signals.ts";
@@ -39,9 +40,10 @@ import {
 	socialLog,
 	socialView,
 } from "./operations/social.ts";
+import { checkVoice } from "./operations/voice-check.ts";
 import { prepareReport } from "./report-sources.ts";
 import { Store } from "./store.ts";
-import { PRESETS, reportDate, Workspaces } from "./workspace.ts";
+import { DOCUMENTS, PRESETS, reportDate, Workspaces } from "./workspace.ts";
 
 export function knowledgeOperation(operation: string): boolean {
 	return (
@@ -57,6 +59,8 @@ export function knowledgeOperation(operation: string): boolean {
 		// persona.migrate falling through to the browser dispatcher, where the only
 		// possible answer was "Unknown operation".
 		operation.startsWith("persona.") ||
+		operation.startsWith("learn.") ||
+		operation === "voice.check" ||
 		/^(bot|workspace|memory|context|report|onboarding|growth)\./.test(operation)
 	);
 }
@@ -83,8 +87,11 @@ export function validateKnowledge(operation: string, input: Input): void {
 		throw new CliError("invalid_argument", "--request-id is required");
 	if (operation === "workspace.set" && input.resource === "MEMORY.md")
 		throw new CliError("invalid_argument", "MEMORY.md is generated; update individual memories instead");
-	if (operation.startsWith("workspace.") && !["AGENTS.md", "PROFILES.md", "MEMORY.md"].includes(input.resource ?? ""))
-		throw new CliError("invalid_argument", "Document must be AGENTS.md, PROFILES.md or MEMORY.md");
+	// One list, shared with the workspace itself. Three separate copies of it grew
+	// out of sync: lessons.md was added to the workspace and this check still
+	// refused to read it back.
+	if (operation.startsWith("workspace.") && !DOCUMENTS.includes(input.resource ?? ""))
+		throw new CliError("invalid_argument", `Document must be one of ${DOCUMENTS.join(", ")}`);
 	if (["workspace.history", "workspace.restore"].includes(operation) && input.resource === "MEMORY.md")
 		throw new CliError("invalid_argument", "MEMORY.md is generated and has no workspace revisions");
 	if (operation === "workspace.restore" && !/^[a-f0-9]{64}$/.test(input.revision ?? ""))
@@ -323,6 +330,30 @@ export class Knowledge {
 						),
 					);
 				});
+			case "voice.check":
+				return checkVoice(input.text ?? "");
+			case "learn.keep": {
+				const store = new Store(this.workspaces.base);
+				return keepFindings(this.workspaces, await store.events(), {
+					note: input.note,
+					since: input.since,
+					write: !input.dry_run,
+				});
+			}
+			case "learn.findings":
+				return this.workspaces.document("lessons.md");
+			case "persona.snapshot": {
+				const document = await this.workspaces.document("AGENTS.md");
+				const version = await this.workspaces.snapshot("AGENTS.md", document.content);
+				return { file: "AGENTS.md", version, revision: document.revision };
+			}
+			case "persona.history":
+				return { file: "AGENTS.md", snapshots: this.workspaces.snapshots("AGENTS.md") };
+			case "persona.rollback": {
+				const raw = input.resource ?? "";
+				if (!/^\d{1,9}$/.test(raw)) throw new CliError("invalid_argument", "Use a version number from persona history");
+				return this.workspaces.rollback("AGENTS.md", Number(raw));
+			}
 			case "persona.migrate":
 				return migratePersonaDocument(this.workspaces, { write: !input.dry_run });
 			case "persona.evolve": {

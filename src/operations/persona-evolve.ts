@@ -26,6 +26,8 @@ export interface PersonaEvolution {
 	profile: VoiceProfile;
 	// The rule that was applied, readable by the caller.
 	derived: string[];
+	// The version the replaced state was kept as, so a caller can roll back to it.
+	snapshot: number | null;
 	// The section before and after; null before means the section did not exist.
 	before: string | null;
 	after: string;
@@ -127,6 +129,7 @@ export async function evolvePersona(
 	if (applied.before?.includes(body)) {
 		return {
 			changed: false,
+			snapshot: null,
 			samples: profile.samples,
 			profile,
 			derived,
@@ -135,9 +138,17 @@ export async function evolvePersona(
 			revision,
 		};
 	}
-	if (options.write !== false) await workspaces.setDocument("AGENTS.md", applied.content, document.revision);
+	// The state being replaced is kept before it is replaced. Without this a
+	// persona that drifts somewhere worse has no way back, and "it evolves" would
+	// mean "it only ever moves forward".
+	let snapshot: number | null = null;
+	if (options.write !== false) {
+		snapshot = await workspaces.snapshot("AGENTS.md", document.content);
+		await workspaces.setDocument("AGENTS.md", applied.content, document.revision);
+	}
 	return {
 		changed: true,
+		snapshot,
 		samples: profile.samples,
 		profile,
 		derived,

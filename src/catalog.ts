@@ -246,6 +246,81 @@ export const COMMANDS: CommandSpec[] = [
 		effect: "local",
 	},
 	{
+		id: "voice.check",
+		description: "Point out what makes a piece of Chinese text read as machine-written",
+		flags: [
+			{
+				key: "text",
+				name: "--text <text>",
+				description: "The text to check",
+				type: "string",
+			},
+		],
+		guidance:
+			"Reports the exact phrases that read as AI, with the reason each one does, plus the markers of a text scrubbed past natural — a comma chain, five equal-length sentences, one judgement sentence after another. Both directions matter: the catalog exists because deleting every tell is its own way of reading as written by a machine. The catalog is adapted from PenguinHarness's Chinese humanizer cues. Advice, not a gate: a flagged phrase kept on purpose is still a choice, and this never rewrites the text.",
+		effect: "local",
+	},
+	{
+		id: "learn.keep",
+		description: "Record what this round taught into the bot's own lessons file",
+		flags: [
+			{
+				key: "since",
+				name: "--since <timestamp>",
+				description: "Only consider activity after an RFC3339 timestamp",
+				type: "string",
+			},
+			{
+				key: "note",
+				name: "--note <text>",
+				description: "One conclusion you reached that the tool cannot measure",
+				type: "string",
+			},
+			{
+				key: "dry_run",
+				name: "--dry-run",
+				description: "Report the findings without writing them",
+				type: "boolean",
+				default: false,
+			},
+		],
+		guidance:
+			"Call this when a round taught something worth carrying into the next one. The tool proposes findings it can support from the activity: repeated failures of the same command, comments that carried a signal, rounds that mostly skipped. It cannot say why one of those mattered, so --note records your own conclusion verbatim and is marked as authored. Findings go to lessons.md with their source, are deduplicated against what is already there, and are never rewritten by an update the way the shipped skill is. Read it with workspace get lessons.md and delete what you disagree with.",
+		effect: "local",
+	},
+	{
+		id: "learn.findings",
+		description: "Read what this bot has kept from earlier rounds",
+		flags: [],
+		guidance: "The same file learn keep writes, so a caller can check what it already knows before adding more.",
+		effect: "local",
+	},
+	{
+		id: "persona.snapshot",
+		description: "Keep the persona as the next version before a derived rewrite replaces it",
+		flags: [],
+		guidance:
+			"persona evolve takes its own snapshot before writing, so this is for a caller that is about to change the persona some other way. Versions only increase and a number is never reused: rollback to v3 always means the same state. Keep the number it prints.",
+		effect: "local",
+	},
+	{
+		id: "persona.rollback",
+		description: "Restore a persona version, keeping what it replaced",
+		argument: { key: "resource", name: "version", description: "Version number from persona history" },
+		flags: [],
+		guidance:
+			"A persona that drifts somewhere worse has to be able to move back, or evolving only ever means moving forward. The state being replaced is snapshotted first, so a rollback that turns out to be wrong is undone the same way. Only AGENTS.md and PROFILES.md have versions.",
+		effect: "local",
+	},
+	{
+		id: "persona.history",
+		description: "List kept persona versions, newest first",
+		flags: [],
+		guidance:
+			"Shows version, content revision and time. The revision is what tells two versions apart when the words look alike.",
+		effect: "local",
+	},
+	{
 		id: "persona.migrate",
 		description: "Move a persona created before it could grow onto the current template",
 		flags: [

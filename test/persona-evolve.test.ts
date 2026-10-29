@@ -163,3 +163,42 @@ test("a persona that already has the growth section only loses the old line", ()
 	assert.equal(migrated.after.match(/## 人格会生长/g)?.length, 1);
 	assert.ok(migrated.after.includes("已经有了。"));
 });
+
+test("evolve keeps the state it replaces, so it can be moved back", async (t) => {
+	// A persona that drifts somewhere worse has to have a way back; otherwise
+	// "it evolves" only ever means "it moves forward".
+	const { workspaces } = await setup(t);
+	const events = comments(["这条不错", "挺有意思的", "哈哈哈", "说得对", "确实这样"]);
+	const result = await evolvePersona(workspaces, { events: async () => events });
+	assert.equal(result.changed, true);
+	assert.equal(typeof result.snapshot, "number");
+	const kept = workspaces.snapshots("AGENTS.md");
+	assert.equal(kept.length, 1);
+	// The snapshot is the state before the rewrite, which had no derived section.
+	const restored = await workspaces.rollback("AGENTS.md", kept[0]?.version ?? 0);
+	assert.ok(!restored.content.includes(SECTION));
+});
+
+test("versions only increase and a rollback keeps what it replaced", async (t) => {
+	const { workspaces } = await setup(t);
+	const original = (await workspaces.document("AGENTS.md")).content;
+	const first = await workspaces.snapshot("AGENTS.md", original);
+	// A second state, different from the first, so rolling back actually replaces
+	// something and the archive step has work to do.
+	const before = await workspaces.document("AGENTS.md");
+	await workspaces.setDocument("AGENTS.md", `${original}\n## 临时\n\n后加的。\n`, before.revision);
+	const second = await workspaces.snapshot("AGENTS.md", (await workspaces.document("AGENTS.md")).content);
+	assert.equal(second, first + 1);
+	// Rolling back archives the current state first, so a wrong rollback is
+	// undone the same way.
+	await workspaces.rollback("AGENTS.md", first);
+	assert.equal((await workspaces.document("AGENTS.md")).content, original);
+	const versions = workspaces.snapshots("AGENTS.md").map((entry) => entry.version);
+	assert.equal(versions[0], second + 1);
+	assert.ok(versions.includes(first));
+});
+
+test("rolling back to a version that was never kept is a refusal", async (t) => {
+	const { workspaces } = await setup(t);
+	await assert.rejects(workspaces.rollback("AGENTS.md", 99), { code: "not_found" });
+});

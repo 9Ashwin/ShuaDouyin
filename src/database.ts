@@ -8,7 +8,7 @@ import * as schema from "./schema.ts";
 export type WorkspaceDB = BetterSQLite3Database<typeof schema>;
 
 // Ordered migration file names; index + 1 is the schema version they produce.
-const MIGRATIONS = ["0001_workspace.sql", "0002_memory_concepts.sql", "0003_bot_preset.sql"];
+const MIGRATIONS = ["0001_workspace.sql", "0002_memory_concepts.sql", "0003_bot_preset.sql", "0004_snapshots.sql"];
 
 // Connections are invocation-local; native handles are always closed, including on Windows.
 export function withDatabase<T>(

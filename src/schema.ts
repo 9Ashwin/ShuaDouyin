@@ -66,6 +66,23 @@ export const revisions = sqliteTable(
 	(table) => [primaryKey({ columns: [table.bot_id, table.resource, table.revision] })],
 );
 
+// A versioned snapshot of a document a derived rewrite is about to replace.
+// Versions only increase, so a rejected attempt cannot reuse a number.
+export const snapshots = sqliteTable(
+	"snapshots",
+	{
+		bot_id: text()
+			.notNull()
+			.references(() => bots.id, { onDelete: "cascade" }),
+		resource: text().notNull(),
+		version: integer().notNull(),
+		revision: text().notNull(),
+		content: text().notNull(),
+		at: text().notNull(),
+	},
+	(table) => [primaryKey({ columns: [table.bot_id, table.resource, table.version] })],
+);
+
 export const migrations = sqliteTable("schema_migrations", {
 	version: integer().primaryKey(),
 });

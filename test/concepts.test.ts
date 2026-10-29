@@ -724,7 +724,7 @@ test("overview, status and usage describe stored memories", async (t) => {
 	assert.equal(status.indexed, 1);
 	assert.equal(status.memory_files, 1);
 	assert.equal(status.overview_stale, false);
-	assert.equal(status.schema_version, 3);
+	assert.equal(status.schema_version, 4);
 	const usage = (await app.execute("memory.usage")) as { count: number; total_text_bytes: number; profiles: number };
 	assert.equal(usage.count, 1);
 	assert.equal(usage.total_text_bytes, Buffer.byteLength("主人希望回答简洁", "utf8"));

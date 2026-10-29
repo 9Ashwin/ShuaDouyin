@@ -7,7 +7,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { withDatabase } from "./database.ts";
 import { CliError, isMissing } from "./errors.ts";
 import { withLease } from "./lease.ts";
-import { revisions } from "./schema.ts";
+import { revisions, snapshots } from "./schema.ts";
 import { atomicCreate, atomicWrite, stateDirectory } from "./store.ts";
 import { botLock, workspacePath } from "./workspace-layout.ts";
 
@@ -155,7 +155,9 @@ const PROFILES_TEMPLATE = [
 	"",
 ].join("\n");
 const MEMORY_TEMPLATE = "# Memory\n\n暂无长期记忆。此文件由 memory 命令生成导航，正文位于 memory/<layer>/<slug>.md。\n";
-const DOCUMENTS = ["AGENTS.md", "PROFILES.md", "MEMORY.md"];
+// lessons.md holds what this bot learned in its own words. It is a document like
+// the others so a caller reads, corrects and deletes it the same way.
+export const DOCUMENTS = ["AGENTS.md", "PROFILES.md", "MEMORY.md", "lessons.md"];
 // Revision rows keep the bot column because the table stores every document
 // version ever written, including rows created before a single workspace
 // existed. A new installation always writes under this one identity.
@@ -476,6 +478,89 @@ export class Workspaces {
 				.onConflictDoNothing()
 				.run(),
 		);
+	}
+	// A snapshot is the state a derived rewrite is about to replace. Versions only
+	// increase and a number is never reused, so "roll back to v3" names one exact
+	// past state and cannot silently mean a different one later.
+	async snapshot(file: string, content: string): Promise<number> {
+		ensureIdentity(this.base);
+		return withDatabase(this.base, (db) => {
+			const latest = db
+				.select({ version: snapshots.version })
+				.from(snapshots)
+				.where(and(eq(snapshots.bot_id, LEGACY_BOT_ID), eq(snapshots.resource, file)))
+				.orderBy(desc(snapshots.version))
+				.limit(1)
+				.get();
+			const version = (latest?.version ?? 0) + 1;
+			db.insert(snapshots)
+				.values({
+					bot_id: LEGACY_BOT_ID,
+					resource: file,
+					version,
+					revision: revision(content),
+					content,
+					at: new Date().toISOString(),
+				})
+				.run();
+			return version;
+		});
+	}
+	snapshots(file: string) {
+		if (!["AGENTS.md", "PROFILES.md"].includes(file))
+			throw new CliError("invalid_argument", "Snapshots exist for AGENTS.md and PROFILES.md");
+		if (!existsSync(join(this.base, "state.sqlite"))) return [];
+		return withDatabase(
+			this.base,
+			(db) =>
+				db
+					.select({
+						version: snapshots.version,
+						revision: snapshots.revision,
+						at: snapshots.at,
+					})
+					.from(snapshots)
+					.where(and(eq(snapshots.bot_id, LEGACY_BOT_ID), eq(snapshots.resource, file)))
+					.orderBy(desc(snapshots.version))
+					.all(),
+			false,
+		);
+	}
+	async rollback(file: string, version: number): Promise<Document> {
+		if (!["AGENTS.md", "PROFILES.md"].includes(file))
+			throw new CliError("invalid_argument", "Snapshots exist for AGENTS.md and PROFILES.md");
+		return this.lock(async () => {
+			const saved = existsSync(join(this.base, "state.sqlite"))
+				? withDatabase(
+						this.base,
+						(db) =>
+							db
+								.select()
+								.from(snapshots)
+								.where(
+									and(
+										eq(snapshots.bot_id, LEGACY_BOT_ID),
+										eq(snapshots.resource, file),
+										eq(snapshots.version, version),
+									),
+								)
+								.get(),
+						false,
+					)
+				: undefined;
+			if (!saved) throw new CliError("not_found", "Snapshot not found");
+			// Rolling back is itself a change worth keeping: the state being replaced
+			// is archived first, so a rollback that turns out to be wrong can be
+			// undone the same way.
+			try {
+				const current = await this.document(file);
+				if (current.content !== saved.content) await this.snapshot(file, current.content);
+			} catch (error) {
+				if (!(error instanceof CliError && error.code === "not_found")) throw error;
+			}
+			await writeFile(join(this.root(), file), saved.content, { mode: 0o600 });
+			return this.document(file);
+		});
 	}
 	history(file: string) {
 		if (!["AGENTS.md", "PROFILES.md"].includes(file))
