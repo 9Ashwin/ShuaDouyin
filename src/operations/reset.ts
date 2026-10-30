@@ -17,6 +17,10 @@ const STATE = [
 	"MEMORY.md",
 	"history.jsonl",
 	"receipts.json",
+	// What earlier rounds learned. It was added after this list was written, so a
+	// reset kept it: a "fresh" bot started with everything the previous one had
+	// been taught, which is the opposite of starting over.
+	"lessons.md",
 	"growth.json",
 	"onboarding.json",
 	"state.sqlite",
