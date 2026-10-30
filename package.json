@@ -1,6 +1,6 @@
 {
 	"name": "shuadouyin",
-	"version": "0.3.3",
+	"version": "0.3.4",
 	"packageManager": "pnpm@10.34.7",
 	"description": "Browse Douyin with a persistent bot persona and a memory of its own",
 	"type": "module",

@@ -3,7 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Session, Snapshot } from "../browser.ts";
 import { classifyComment } from "../comment-stance.ts";
 import { CliError } from "../errors.ts";
-import { captureSnapshot } from "./capture.ts";
+import { captureSnapshot, noteImage, noteSlide } from "./capture.ts";
 import { listComments } from "./comments.ts";
 import type { Input } from "./validate.ts";
 
@@ -28,17 +28,36 @@ export interface DigestFrame {
 // Long works earn more samples; a nine-second clip is its own summary. The
 // fractions avoid the opening (usually a title card) and the end (usually a
 // call to follow), which are the two least informative parts of a short video.
-export function samplePositions(duration: number, wanted: number): number[] {
+// How many samples a work deserves, from its length.
+//
+// Three frames is right for a few minutes and much too few for twenty: half an hour
+// sampled at 25/50/75% is three stills of somebody talking, and the argument they
+// made in between is gone. A long work gets more, capped so the capture does not
+// take longer than watching it.
+export function samplesFor(duration: number, ceiling = 8): number {
+	if (!Number.isFinite(duration) || duration <= 0) return 0;
+	if (duration < 15) return 0;
+	if (duration < 45) return 1;
+	// One sample per two minutes past the first, plus the three the base case needs:
+	// 3 minutes gets 3, 10 minutes gets 5, 20 minutes gets 8.
+	if (duration < 180) return 3;
+	return Math.min(ceiling, 3 + Math.floor((duration - 180) / 120));
+}
+
+export function samplePositions(duration: number, wanted?: number): number[] {
 	if (!Number.isFinite(duration) || duration <= 0) return [];
-	// A work under fifteen seconds is its own summary.
-	if (duration < 15) return [];
-	// Under forty-five seconds one frame in the middle is enough, and it must be
-	// the middle whatever count was asked for: the old code took the second
-	// element of a one-element list when --frames 2 was passed, so a 15–45 second
-	// work sampled nothing at all and said so only through an empty array.
-	if (duration < 45) return [duration * 0.5];
-	const fractions = wanted >= 3 ? [0.25, 0.5, 0.75] : [0.5];
-	return fractions.slice(0, Math.max(1, wanted)).map((f) => duration * f);
+	const automatic = samplesFor(duration);
+	if (automatic === 0) return [];
+	// An explicit count is honoured: `--frames 1` means one frame, and a caller that
+	// wants the middle of a long talk has a reason. What is not honoured is asking
+	// for nothing, which the hasValue check upstream already refuses.
+	const count = Math.max(wanted ?? automatic, 1);
+	// Until the first millisecond and after the last are both wrong: the opening is a
+	// title card and the end is a request to follow.
+	if (count === 1) return [duration * 0.5];
+	// Spread across the middle eighty percent, so the first sample is past the
+	// opening and the last is before the sign-off.
+	return Array.from({ length: count }, (_, index) => duration * (0.1 + (0.8 * index) / (count - 1)));
 }
 
 export async function digest(
@@ -56,7 +75,46 @@ export async function digest(
 	const limitations: string[] = [];
 	const directory = store.path(join("captures", `digest-${work.id}`));
 
-	if (input.frames !== 0 && initial.video) {
+	// An image post is a set of pictures, and the set is the work. Sampling a video
+	// means picking moments inside one; sampling an image post means looking at every
+	// one of them, because the point of the format is that you swipe through them.
+	if (input.frames !== 0 && initial.note) {
+		const slides: number[] = [];
+		// Until the count is known there is nothing to loop over, so each step asks
+		// where it is and stops when the page says it is at the end.
+		for (let guard = 0; guard < (input.limit ?? 20); guard++) {
+			signal.throwIfAborted();
+			try {
+				const captured = await noteImage(
+					session,
+					store,
+					{ ...input, output: join(directory, `slide-${String(slides.length + 1).padStart(2, "0")}.png`) },
+					signal,
+				);
+				slides.push(slides.length + 1);
+				if (
+					captured.slide.index !== null &&
+					captured.slide.count !== null &&
+					captured.slide.index + 1 >= captured.slide.count
+				)
+					break;
+			} catch (error) {
+				// The first page failing is worth reporting; one later page failing is
+				// the boundary, and the pages already read are still the answer.
+				if (!slides.length)
+					limitations.push(error instanceof CliError ? error.message : "Could not read the image post");
+				break;
+			}
+			try {
+				const moved = await noteSlide(session, input, "next", signal);
+				if (moved.boundary || !moved.moved) break;
+			} catch {
+				// No further page could be reached. What was read stands.
+				break;
+			}
+		}
+		if (slides.length) limitations.push("Every page of the image post was captured in order.");
+	} else if (input.frames !== 0 && initial.video) {
 		const positions = samplePositions(duration ?? 0, input.frames ?? 3);
 		if (!positions.length)
 			limitations.push(

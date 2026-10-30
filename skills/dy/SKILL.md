@@ -168,8 +168,6 @@ dy context show --query "…"
 ### 起步与检查
 
 ```bash
-dy init                         # 建工作区
-dy onboarding show              # 读引导状态
 dy auth login                   # 扫码登录（有头 Chrome）
 dy auth status
 dy browser start / stop / status
@@ -178,10 +176,9 @@ dy diagnostics                  # 反复失败的命令
 dy page facts                   # 页面此刻真实的状态
 dy update --check               # 有没有新版本
 dy skill install                # 装 skill 到 agent 目录
-dy guide                        # 这份文档的完整内容
 ```
 
-`dy source` 只对开发 dy 的人有意义，正常使用用不到。
+其余的就：`dy init` 建工作区，`dy guide` 输出完整文档。`dy source` 只对开发 dy 的人有意义。
 
 ## 按任务读参考
 

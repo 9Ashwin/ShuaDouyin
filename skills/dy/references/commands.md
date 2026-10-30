@@ -69,6 +69,7 @@ dy page scroll --pixels 1200
 | 分享文本或链接转 ID | `dy link resolve <text>` |
 | 读当前作品 | `dy video info` |
 | 搜索 | `dy search <词>`、`dy user search <词>` |
+| 问平台自己的 AI | `dy ai ask --query "…"` |
 | 当前标签页是什么 | `dy status` |
 
 `feed.next` 会核实作品 ID 变了才算成功。读到「当前是直播」不代表命令坏了——见 `platform-facts.md` 的滑片过渡说明。

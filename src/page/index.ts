@@ -911,6 +911,38 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			);
 			return { present, comment_id: args.comment_id };
 		}
+		case "ai.prepare": {
+			// The composer is a plain contenteditable rather than a Draft editor, and it
+			// is the only visible one on the page. Focusing it here is what makes the
+			// following keystrokes land in it instead of nowhere.
+			const editor = [...document.querySelectorAll<HTMLElement>(".douyin-chat-editor,[contenteditable='true']")].find(
+				(element) => {
+					const box = element.getBoundingClientRect();
+					return box.width > 100 && box.height > 10;
+				},
+			);
+			if (!editor) return { ready: false };
+			editor.focus();
+			return { ready: true };
+		}
+		case "ai.answer": {
+			// The answer is whatever the conversation area holds after the question.
+			// Reading the whole page would include the nav and the previous answers, so
+			// the block that contains the question is used as the boundary.
+			const asked = String((args as { question?: unknown }).question ?? "").trim();
+			const body = document.body.innerText ?? "";
+			const at = asked ? body.indexOf(asked) : -1;
+			const answer = at >= 0 ? body.slice(at + asked.length).trim() : body.trim();
+			const links = [...document.querySelectorAll<HTMLAnchorElement>('a[href*="/video/"]')]
+				.map((anchor) => {
+					const id = /\/video\/(\d+)/.exec(anchor.getAttribute("href") ?? "")?.[1];
+					return id ? { id, text: clean(anchor.textContent).slice(0, 80) } : null;
+				})
+				.filter((entry): entry is { id: string; text: string } => entry !== null);
+			const unique = new Map<string, { id: string; text: string }>();
+			for (const link of links) if (!unique.has(link.id)) unique.set(link.id, link);
+			return { question: asked, answer, links: [...unique.values()] };
+		}
 		case "comment.writable": {
 			// Whether this work accepts a new comment, asked before anything is typed.
 			//

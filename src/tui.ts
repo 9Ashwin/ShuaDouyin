@@ -171,6 +171,7 @@ export class TerminalUI {
 						{ value: "live", label: "直播", description: "读直播间、发弹幕、送礼" },
 						{ value: "social", label: "关系", description: "目标、候选、卡片和结果" },
 						{ value: "person", label: "看一个人", description: "对方发过什么、写过什么" },
+						{ value: "ai", label: "问抖音 AI", description: "让平台自己回答，当线索用" },
 						{ value: "browse", label: "浏览轮次", description: "开一轮、记看过和划过的、收尾" },
 						{ value: "note", label: "图文作品", description: "读图文帖的每一页" },
 						{ value: "link", label: "解析链接", description: "把分享文案或链接解析成作品 ID" },
@@ -202,6 +203,7 @@ export class TerminalUI {
 				if (selected === "live") commands = COMMANDS.filter((command) => /^live\./.test(command.id));
 				if (selected === "social") commands = COMMANDS.filter((command) => /^social\./.test(command.id));
 				if (selected === "person") commands = COMMANDS.filter((command) => /^person\./.test(command.id));
+				if (selected === "ai") commands = COMMANDS.filter((command) => /^ai\./.test(command.id));
 				if (selected === "browse") commands = COMMANDS.filter((command) => /^browse\./.test(command.id));
 				if (selected === "note") commands = COMMANDS.filter((command) => /^note\./.test(command.id));
 				if (selected === "link") commands = COMMANDS.filter((command) => /^link\./.test(command.id));

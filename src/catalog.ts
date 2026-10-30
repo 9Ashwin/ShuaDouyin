@@ -784,6 +784,22 @@ export const COMMANDS: CommandSpec[] = [
 		effect: "navigation",
 	},
 	{
+		id: "ai.ask",
+		description: "Ask Douyin's own assistant a question and read what it answers",
+		flags: [
+			{
+				key: "query",
+				name: "--query <question>",
+				description: "What to ask, up to 500 characters",
+				type: "string",
+				required: true,
+			},
+		],
+		effect: "navigation",
+		guidance:
+			"Douyin's 抖音 AI answers in prose and often lists works with links. That is a different kind of evidence from everything else here: the rest reports what the page shows, this reports what the platform's model says about its own content. Treat the answer as a lead to check by opening the work, and quote it as the platform's claim. The work ids it links to are real page links and can be opened with video open. Answers stream in; complete=false means the read gave up before the text stopped growing.",
+	},
+	{
 		id: "search",
 		description: "Search Douyin and return loaded video results",
 		argument: { key: "query", name: "query", description: "Search keywords" },

@@ -5,6 +5,7 @@ import { CliError, normalizeError } from "./errors.ts";
 import { Knowledge, knowledgeOperation, validateKnowledge } from "./knowledge.ts";
 import type { Memory } from "./memory/concept.ts";
 import { migrateLegacyLayout } from "./migrate.ts";
+import { askDouyin } from "./operations/ai-search.ts";
 import { audio, capture, noteImage, noteSlide, observe } from "./operations/capture.ts";
 import { captureChatImage, listChats, readChat } from "./operations/chat.ts";
 import { compareChatWindows } from "./operations/chat-diff.ts";
@@ -692,6 +693,8 @@ export class App {
 					{ ...input, relation: operation === "user.following" ? "following" : "followers" },
 					signal,
 				);
+			case "ai.ask":
+				return askDouyin(session, input, signal);
 			case "person.read":
 				input.user_id = resourceID(input.resource ?? "", "user");
 				return readPerson(session, input, signal);

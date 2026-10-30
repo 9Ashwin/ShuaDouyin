@@ -53,11 +53,15 @@ export async function navigate(session: Session, url: string, kind: string, sign
 			kind === "video"
 				? // Douyin redirects an image post from /video/ to /note/.
 					!!(state.video?.id ?? state.note?.id)
-				: kind === "search"
-					? state.page_kind === "search"
-					: // The route commits before the profile renders, so the URL alone would let
-						// the caller read a page whose header has not appeared yet.
-						!!state.url?.includes("/user/") && state.page_kind === "profile",
+				: kind === "agent"
+					? // The AI page reports itself as an ordinary page; what identifies it is
+						// the route and a composer being present.
+						!!state.url?.includes("/aisearch")
+					: kind === "search"
+						? state.page_kind === "search"
+						: // The route commits before the profile renders, so the URL alone would let
+							// the caller read a page whose header has not appeared yet.
+							!!state.url?.includes("/user/") && state.page_kind === "profile",
 		signal,
 	).catch((error: unknown) => {
 		// A profile that redirects elsewhere is a real answer, not a changed selector:
