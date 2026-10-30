@@ -1,6 +1,6 @@
 ---
 name: dy
-description: Browse Douyin with an agent persona and a memory of its own. Read the feed, watch works, comment, follow people, sit in live rooms, and keep what was learned as sourced memories.
+description: Browse Douyin (抖音) with a persistent bot persona and its own memory. Use this whenever the user asks to 刷抖音, browse the Douyin feed, look at a Douyin video or user, read or post comments there, send Douyin DMs, enter a live room, or grow a bot persona through what it has watched. Also use it when the user says 刷一下, 看看抖音, 评论一下, 关注这个人, or refers to Douyin by name in any language, even if they do not mention a CLI. It is the only tool that can operate a logged-in Douyin account, so when a task involves Douyin at all, use this skill rather than guessing at an approach.
 allowed-tools: Bash(dy:*) Bash(npx dy:*)
 ---
 
@@ -73,7 +73,7 @@ dy video info                # 读当前作品
 
 ## 命令
 
-所有命令返回一个 `{ok:true,data}` 信封；失败是 `{ok:false,error}` 加非零退出。`dy schema` 给全部 120+ 命令，`dy <命令> --help` 给单个。
+所有命令返回一个 `{ok:true,data}` 信封；失败是 `{ok:false,error}` 加非零退出。`dy schema` 给全部命令和参数，`dy <命令> --help` 给单个。
 
 ### 刷与看
 
@@ -123,7 +123,9 @@ dy comment phrases              # 哪些句式还能用
 dy comment phrases --use "…"    # 记一次使用
 ```
 
-**按作品算，不按全局算。** 实测两条视频中位数 11 字和 46 字，差四倍。
+**按作品算，不按全局算。** 同一个号上，不同区的评论中位长度可以差好几倍：一个区可能七八个字，另一个区要写满四五十个字。所以别把上个区学到的语气带到这个区，每换一条作品重新量。
+
+具体数字每次都不一样，跑一次看 `profile.length.median`，不要信这里举例的数。
 
 `comment voice` 还给每条评论判 `has-wit` / `flat` / `generic-praise`，依据是接话、具体指认、反转三个维度，以及堆砌术语。实测一个区里 247 赞的是「下次一起唱」，150 字堆术语那条只有 2 赞，长度和赞数相关 -0.38。
 
