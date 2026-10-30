@@ -85,17 +85,40 @@ export function installShape(): InstallShape {
 		? join(entry, ".dy-build-commit")
 		: join(entry, "..", "commit");
 	const head = existsSync(marker) ? readCommit(marker) : null;
+	// Which source this came from. A published package has no .git and was never
+	// built from a working tree, so updating it from a git spec would switch it to a
+	// different source; the registry name is the only one it knows. The build writes
+	// `origin` beside the commit for exactly this, and a copy without it predates
+	// publishing and can only have come from git.
+	const originPath = join(entry, ".dy-build-origin");
+	const origin = existsSync(originPath) ? readText(originPath) : "git";
 	const managed = existsSync(join(entry, "..", ".dy-release-owner"));
 	const global = entry.includes(`${join("lib", "node_modules")}`) || entry.includes(`${join("pnpm", "global")}`);
 	return {
 		entry,
 		kind: managed ? "managed-release" : global ? "npm-global" : "npm-local",
 		head,
+		// A published copy is updated from the registry by name: a git spec would
+		// reinstall from a different source and lose the fact that the version is
+		// what npm tracks. A copy installed from git keeps the git spec, because that
+		// is the only source it has.
 		update: managed
 			? "sh scripts/install.sh"
-			: `${global ? "npm install -g" : "npm install"} github:9Ashwin/ShuaDouyin@latest`,
+			: origin === "npm"
+				? `${global ? "npm install -g" : "npm install"} shuadouyin@latest`
+				: `${global ? "npm install -g" : "npm install"} github:9Ashwin/ShuaDouyin@latest`,
 		has_source: false,
 	};
+}
+
+// A one-line marker written beside the build. Absent means a copy built before the
+// marker existed, which can only have come from a working tree.
+function readText(path: string): string {
+	try {
+		return readFileSync(path, "utf8").trim() || "git";
+	} catch {
+		return "git";
+	}
 }
 
 function readCommit(path: string): string | null {

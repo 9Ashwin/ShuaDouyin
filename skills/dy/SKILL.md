@@ -17,10 +17,16 @@ dy --version
 有版本号就直接用。没有就装：
 
 ```bash
-npm install -g github:9Ashwin/ShuaDouyin
+npm install -g shuadouyin
 ```
 
-安装时会从源码构建一次，几秒。**唯一需要的是本机已有的 Chrome**，不下载浏览器。装完 `dy init` 建工作区，`dy auth login` 扫码登录抖音。
+包叫 `shuadouyin`，命令叫 `dy`。**唯一需要的是本机已有的 Chrome**，不下载浏览器。装完 `dy init` 建工作区，`dy auth login` 扫码登录抖音。
+
+从源码装也行（会构建一次，几秒）：
+
+```bash
+npm install -g github:9Ashwin/ShuaDouyin
+```
 
 装 skill 到 agent 目录（可选，这样其他 agent 也能读到）：
 
@@ -44,13 +50,19 @@ dy update --check
 
 **判断新旧用 `behind`。** 版本号告诉你跨了几层功能，但一层里可能有几十个提交，所以只有 commit 能回答「我是不是最新的」。
 
-按 `update` 字段给的命令更新。通常是：
+按 `update` 字段给的命令更新。从 npm 装的：
+
+```bash
+npm install -g shuadouyin@latest
+```
+
+从源码装的：
 
 ```bash
 npm install -g github:9Ashwin/ShuaDouyin@latest
 ```
 
-**已经装过的话，不加 `@latest` 或 `--force` 会显示 up to date 而不更新**——npm 记录的是 commit，不是分支，它认为已经满足要求了。
+**从源码装的话，不加 `@latest` 或 `--force` 会显示 up to date 而不更新**——npm 记录的是 commit，不是分支，它认为已经满足要求了。npm 包按版本号，没这个问题。
 
 更新完 skill 也要重装一次，否则 agent 读到的是旧说明：
 

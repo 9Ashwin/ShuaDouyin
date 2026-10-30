@@ -1,9 +1,8 @@
 {
 	"name": "shuadouyin",
 	"version": "0.3.0",
-	"private": true,
 	"packageManager": "pnpm@10.34.7",
-	"description": "ShuaDouyin: Douyin CLI and TUI with bot workspaces and local memory",
+	"description": "Browse Douyin with a persistent bot persona and a memory of its own",
 	"type": "module",
 	"license": "MIT",
 	"bin": {
@@ -19,7 +18,10 @@
 		"SECURITY.md",
 		"LICENSE",
 		"skills",
-		".dy-build-commit"
+		".dy-build-commit",
+		"!dist/**/*.map",
+		"!dist/**/*.d.ts",
+		".dy-build-origin"
 	],
 	"engines": {
 		"node": ">=22.19.0"
@@ -31,8 +33,9 @@
 		"test": "node scripts/test.ts",
 		"test:browser": "node scripts/test-browser.ts",
 		"start": "node dist/cli.js",
-		"prepare": "node scripts/prepare.ts",
-		"hooks:install": "husky || true"
+		"hooks:install": "husky || true",
+		"prepublishOnly": "node scripts/prepare.ts && node scripts/check-packed.ts",
+		"prepare": "node scripts/prepare.ts"
 	},
 	"dependencies": {
 		"@earendil-works/pi-tui": "1.4.0",
@@ -66,5 +69,8 @@
 		"agent",
 		"cli",
 		"automation"
-	]
+	],
+	"publishConfig": {
+		"access": "public"
+	}
 }

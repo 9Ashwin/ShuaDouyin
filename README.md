@@ -28,15 +28,21 @@
 ## 安装
 
 ```bash
-npm install -g github:9Ashwin/ShuaDouyin
+npm install -g shuadouyin
 ```
 
-`dy` 随即可用。安装时会从源码构建一次（几秒），**不下载浏览器**——用你本机已有的 Chrome。
+`dy` 随即可用。**不下载浏览器**——用你本机已有的 Chrome。
 
-这个包从 GitHub 分发，不在 npm registry 上。
+包叫 `shuadouyin`，命令叫 `dy`。发布包里带的是构建好的 `dist/`，装上就能跑，不需要本地再编译一次。
 
 <details>
 <summary><strong>其他</strong></summary>
+
+从源码装（会构建一次，几秒）：
+
+```bash
+npm install -g github:9Ashwin/ShuaDouyin
+```
 
 装到独立目录，不需要全局 npm：
 
@@ -47,7 +53,7 @@ curl -fsSL https://raw.githubusercontent.com/9Ashwin/ShuaDouyin/main/scripts/ins
 卸载：
 
 ```bash
-npm uninstall -g github:9Ashwin/ShuaDouyin
+npm uninstall -g shuadouyin
 ```
 
 卸载保留 `~/.dy` 里的 bot、记忆和账号登录状态。

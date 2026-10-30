@@ -33,11 +33,18 @@ say, or whether a person is worth knowing.
 ## Install
 
 ```bash
-npm install -g github:9Ashwin/ShuaDouyin
+npm install -g shuadouyin
 ```
 
-`dy` is then on your PATH. The only requirement is a local Chrome — **no browser
-is downloaded**.
+`dy` is then on your PATH. The package is `shuadouyin` and the command is `dy`;
+the published tarball ships a built `dist/`, so nothing compiles on install. The
+only requirement is a local Chrome — **no browser is downloaded**.
+
+Installing from source also works, and builds once:
+
+```bash
+npm install -g github:9Ashwin/ShuaDouyin
+```
 
 This package is distributed from GitHub, not the npm registry.
 
@@ -53,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/9Ashwin/ShuaDouyin/main/scripts/ins
 Uninstall:
 
 ```bash
-npm uninstall -g github:9Ashwin/ShuaDouyin
+npm uninstall -g shuadouyin
 ```
 
 Uninstalling keeps the bot, memories and account login in `~/.dy`.
