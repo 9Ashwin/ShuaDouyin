@@ -23,8 +23,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm check
-      - run: pnpm test
+      # Tests run against the built CLI: flags.test.ts and install.test.ts both
+      # spawn dist/cli.js, which does not exist in a fresh checkout. Running the
+      # suite first made all three systems fail on a missing module rather than on
+      # anything the change did.
       - run: pnpm build
+      - run: pnpm test
       - run: pnpm pack --pack-destination .artifacts
   browser:
     runs-on: ubuntu-latest
