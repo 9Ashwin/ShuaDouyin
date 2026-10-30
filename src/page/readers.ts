@@ -428,7 +428,7 @@ function fiberConversation(element: HTMLElement): unknown {
 		const props = own(fiber, "memoizedProps");
 		for (const name of ["conversation", "curConversation"]) {
 			const conversation = own(props, name);
-			// A direct chat's record id is "0:1:105358793304:1543352384762973", not a
+			// A direct chat's record id is "0:1:<account>:<conversation>", not a
 			// bare number, so requiring digits here found no record for a direct chat
 			// at all — and its type stayed unknown while both groups read correctly.
 			const id = scalarID(inherited(conversation, "id"));

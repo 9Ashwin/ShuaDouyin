@@ -28,7 +28,7 @@ dy social goal --text "找有代运营需求的商家" --goal-preset lead --dail
 cat > /tmp/sources.json <<'JSON'
 [
   {"person": "MS4wLjABAAA…", "name": "示例用户", "where": "评论区",
-   "source": "comment:7698346212324830650", "text": "有没有靠谱的编曲老师推荐"}
+   "source": "comment:<id>", "text": "有没有靠谱的编曲老师推荐"}
 ]
 JSON
 dy social signal --sources /tmp/sources.json

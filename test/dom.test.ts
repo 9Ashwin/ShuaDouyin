@@ -8,29 +8,29 @@ import { stableId } from "../src/page/dom.ts";
 // silently broke a lookup that named the field.
 
 test("the same id under either naming is found", () => {
-	const direct = { conversationId: "0:1:105358793304:1543352384762973" };
-	const group = { id: "7701367822991049270" };
-	assert.equal(stableId(direct), "0:1:105358793304:1543352384762973");
-	assert.equal(stableId(group), "7701367822991049270");
+	const direct = { conversationId: "0:1:100000000001:1540000000000123" };
+	const group = { id: "7700000000000000123" };
+	assert.equal(stableId(direct), "0:1:100000000001:1540000000000123");
+	assert.equal(stableId(group), "7700000000000000123");
 });
 
 test("an id on the prototype is found, not only an own property", () => {
-	const proto = { id: "7701367822991049270", shortId: "7701367822991049270" };
+	const proto = { id: "7700000000000000123", shortId: "7700000000000000123" };
 	const record = Object.create(proto) as object;
 	Object.assign(record, { name: "a group" });
-	assert.equal(stableId(record), "7701367822991049270");
+	assert.equal(stableId(record), "7700000000000000123");
 });
 
 test("a renamed field is found by its shape", () => {
 	// The failure this guards: a future build calls it something new and every
 	// lookup by name returns nothing.
-	assert.equal(stableId({ chatId: "7701367822991049270" }), "7701367822991049270");
+	assert.equal(stableId({ chatId: "7700000000000000123" }), "7700000000000000123");
 	assert.equal(stableId({ conversationShortId: "7641224563304546851" }), "7641224563304546851");
 });
 
 test("two different ids are refused rather than guessed", () => {
 	// Picking one would send to whichever field happened to come first.
-	assert.equal(stableId({ id: "7701367822991049270", otherId: "7641224563304546851" }), null);
+	assert.equal(stableId({ id: "7700000000000000123", otherId: "7641224563304546851" }), null);
 });
 
 test("a count is not an identity", () => {
@@ -43,20 +43,20 @@ test("a count is not an identity", () => {
 test("a getter is read, and a throwing getter does not break the scan", () => {
 	const withGetter = {
 		get id() {
-			return "7701367822991049270";
+			return "7700000000000000123";
 		},
 	};
-	assert.equal(stableId(withGetter), "7701367822991049270");
+	assert.equal(stableId(withGetter), "7700000000000000123");
 	const hostile = {
 		get id(): string {
 			throw new Error("page code");
 		},
-		someId: "7701367822991049270",
+		someId: "7700000000000000123",
 	};
-	assert.equal(stableId(hostile), "7701367822991049270");
+	assert.equal(stableId(hostile), "7700000000000000123");
 });
 
 test("a preferred name wins when it is unambiguous", () => {
-	const record = { id: "7701367822991049270", groupId: "7701367822991049270" };
-	assert.equal(stableId(record, ["groupId"]), "7701367822991049270");
+	const record = { id: "7700000000000000123", groupId: "7700000000000000123" };
+	assert.equal(stableId(record, ["groupId"]), "7700000000000000123");
 });

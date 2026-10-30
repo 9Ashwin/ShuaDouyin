@@ -73,7 +73,7 @@ test("a follow-up becomes due and can be closed", async (t) => {
 test("a group conversation is not a relationship", async (t) => {
 	const base = await setup(t, "group");
 	const store = new Store(base);
-	await store.append("chat.send", { conversation_id: "native:7701367822991049270", text: "群里说话" });
+	await store.append("chat.send", { conversation_id: "native:7700000000000000123", text: "群里说话" });
 	const list = (await new App({ state_dir: base }).execute("social.list", {})) as { relations: unknown[] };
 	assert.deepEqual(list.relations, []);
 });
