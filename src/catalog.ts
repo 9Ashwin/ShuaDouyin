@@ -1296,6 +1296,30 @@ export const COMMANDS: CommandSpec[] = [
 			"The one part of the social loop that is a fact rather than a judgement: either an incoming message follows one of this account's messages or it does not. Reports how many were answered, which are still hanging with how long they have waited, the median reply delay, and whether the loaded window is only outgoing. It does not read what a reply said and does not decide whether the relationship moved — social stage still refuses to infer that. 'Unanswered' means nothing loaded after it, not that nobody ever replied.",
 	},
 	{
+		id: "social.advise",
+		description: "Say what to do next with someone, from whether they answered",
+		argument: { key: "resource", name: "person", description: "Stable person ID on a relationship card" },
+		flags: [
+			{
+				key: "conversation_id",
+				name: "--conversation-id <id>",
+				description: "Stable ID from chat list",
+				type: "string",
+				required: true,
+			},
+			{
+				key: "limit",
+				name: "--limit <count>",
+				description: "Messages to consider, 1..50",
+				type: "number",
+				default: 30,
+			},
+		],
+		effect: "read",
+		guidance:
+			"Reads one conversation and the person's card, then proposes one of four things: continue, wait, stop, or unknown with the reason. It writes nothing. Two conditions are required to say stop — several messages and at least a day of silence — because one message from this morning is not being ignored. A stage it says is reachable is the one the goal's own vocabulary allows evidence to reach, never beyond it, and even that is a proposal: social stage is the only thing that records a stage, and it refuses to infer a connection from anything but a stated decision.",
+	},
+	{
 		id: "social.stage",
 		description: "Record where a relationship stands, and what you want from it",
 		argument: { key: "resource", name: "person", description: "Stable person ID" },

@@ -62,7 +62,10 @@ export function knowledgeOperation(operation: string): boolean {
 		// social.response reads the page, so it must not be claimed as local: the
 		// prefix rule would have made it fall through here and report "unknown
 		// workspace operation" instead of reaching the browser.
-		(operation.startsWith("social.") && operation !== "social.response") ||
+		// social.response and social.advise read the page, so neither can be claimed
+		// as local: the prefix rule would drop them into the workspace dispatcher and
+		// answer "unknown workspace operation".
+		(operation.startsWith("social.") && !["social.response", "social.advise"].includes(operation)) ||
 		operation === "voice.check" ||
 		/^(bot|workspace|memory|context|report|onboarding|growth)\./.test(operation)
 	);

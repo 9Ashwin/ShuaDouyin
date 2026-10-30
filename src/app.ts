@@ -48,7 +48,9 @@ import { type Phrase, phraseMemories, phraseMemoryText, usePhrase } from "./oper
 import { userRelations } from "./operations/relations.ts";
 import { observeResponse } from "./operations/response-window.ts";
 import { skillInstall, skillStatus } from "./operations/skill.ts";
+import type { Vocabulary } from "./operations/social.ts";
 import { checkGoalQuota, pauseState } from "./operations/social.ts";
+import { advise, wouldSetStage } from "./operations/social-advice.ts";
 import { sourceCheckout } from "./operations/source.ts";
 import { updateReport } from "./operations/update.ts";
 import { type Input, isWrite, validate } from "./operations/validate.ts";
@@ -674,6 +676,39 @@ export class App {
 					{ ...input, relation: operation === "user.following" ? "following" : "followers" },
 					signal,
 				);
+			case "social.advise": {
+				// Reads the conversation, then the card. Both are needed: the window
+				// says whether anything came back, and the card says who this person is
+				// to this installation.
+				const window = await observeResponse(session, input.conversation_id ?? "", {
+					limit: input.limit,
+					signal,
+				});
+				const card = await new Knowledge(this.store.base).execute("social.relation", {
+					resource: input.resource ?? "",
+				});
+				const known = card as { known?: boolean; stage?: string; contact_count?: number } & Record<string, unknown>;
+				if (!known.known)
+					return {
+						person: input.resource ?? null,
+						conversation_id: input.conversation_id ?? null,
+						window,
+						advice: null,
+						reason: "No card for this person yet. Discovery and a first look at their profile come before a message.",
+					};
+				const advice = advise(known as never, window);
+				const vocabulary = (known.vocabulary ?? null) as Vocabulary | null;
+				return {
+					person: input.resource ?? null,
+					conversation_id: input.conversation_id ?? null,
+					stage: known.stage ?? null,
+					window,
+					advice,
+					...(vocabulary ? { stage_this_would_support: wouldSetStage(known as never, advice, vocabulary) } : {}),
+					// Said every time, because the whole point is that this proposes.
+					written: false,
+				};
+			}
 			case "social.response":
 				return observeResponse(session, input.conversation_id ?? "", {
 					limit: input.limit,
