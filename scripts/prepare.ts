@@ -30,7 +30,30 @@ function commit(): string | null {
 const head = commit();
 if (head) writeFileSync(".dy-build-commit", head, "utf8");
 
-run(process.execPath, ["scripts/build.ts"]);
+// esbuild is a dependency, but its platform binary arrives through that
+// package's own install script. A machine or a config that skips lifecycle
+// scripts — this repository's own .npmrc sets ignore-scripts, and some users set
+// it globally — gets the package without the binary, and the build then fails with
+// "Cannot find package 'esbuild'", which says nothing about the real cause. The
+// install is what a person sees when something goes wrong, so it says what to do.
+try {
+	run(process.execPath, ["scripts/build.ts"]);
+} catch {
+	throw new Error(
+		[
+			"Building dy failed.",
+			"",
+			"Most often this is esbuild's platform binary being skipped: npm ran the install",
+			"with lifecycle scripts disabled, so the package is present but unusable.",
+			"",
+			"Fix it with either:",
+			"  npm install -g github:9Ashwin/ShuaDouyin --ignore-scripts=false",
+			"  npm config set ignore-scripts false   # if it is set globally",
+			"",
+			"The build output above is the full error.",
+		].join("\n"),
+	);
+}
 
 // Hook installation is a convenience for a working checkout, not something an
 // installed package needs, and it must not decide whether the install succeeds.

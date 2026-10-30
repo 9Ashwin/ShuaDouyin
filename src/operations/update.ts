@@ -1,16 +1,19 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // How this dy was installed, and what updates it.
 //
-// The package version never changes between pushes (it is still 0.1.0), so a
-// version number cannot answer "am I current". What does answer it is the git
-// commit the installed copy was built from, compared with the repository's
-// current main. That is also why reinstalling is the update mechanism: npm
-// records a git dependency by commit, and a plain `npm install` on an
-// already-satisfied range reports "up to date" without fetching new commits.
+// The commit answers "am I current" and the version answers "how far behind am I".
+// Both are reported because they answer different questions: the version changes
+// when a capability layer lands, and several dozen commits can sit inside one
+// version. A version alone would say "0.3.0" to a copy twenty commits behind and
+// to one a commit behind, which is why it is not the only signal.
+//
+// Reinstalling is the update mechanism: npm records a git dependency by commit,
+// and a plain `npm install` on an already-satisfied range reports "up to date"
+// without fetching new commits.
 
 export interface InstallShape {
 	// Where this executable lives, after resolving symlinks.
@@ -24,6 +27,20 @@ export interface InstallShape {
 	// True when a copy exists beside the executable, which is what `dy source`
 	// needs; a published package keeps its source out of the package.
 	has_source: boolean;
+}
+
+// The version this copy was built with, read beside the executable so an installed
+// package (which has no src/) can still report it.
+function packageVersion(): string | null {
+	try {
+		const root = packageRoot();
+		const info = existsSync(join(root, "package.json")) ? join(root, "package.json") : null;
+		if (!info) return null;
+		const data: unknown = JSON.parse(readFileSync(info, "utf8"));
+		return typeof data === "object" && data !== null && "version" in data ? String(data.version) : null;
+	} catch {
+		return null;
+	}
 }
 
 function git(root: string, ...args: string[]): string | null {
@@ -112,10 +129,12 @@ export async function latestCommit(timeoutMs = 5000): Promise<{ head: string | n
 // call it without inventing a workspace.
 export async function updateReport(check: boolean): Promise<unknown> {
 	const shape = installShape();
-	if (!check) return { ...shape, latest: null, behind: null, note: null };
+	const version = packageVersion();
+	if (!check) return { ...shape, version, latest: null, behind: null, note: null };
 	const remote = await latestCommit();
 	return {
 		...shape,
+		version,
 		latest: remote.head,
 		// null means "cannot tell", which is not the same as false.
 		behind: shape.head && remote.head ? shape.head !== remote.head : null,

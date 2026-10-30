@@ -69,16 +69,26 @@ async function releaseAndVerify(release: () => Promise<void>, lockPath: string):
 	let failure: CliError | null = null;
 	try {
 		await release();
-	} catch (error) {
-		failure = new CliError("busy", "The workspace lock could not be released cleanly", {
-			hint: "The lock is removed below if it is still there; a later command will not wait on it.",
-			cause: error,
-		});
+	} catch {
+		// A throw here does not mean the lock survived: the library's internal state
+		// and the directory on disk disagree often enough that reporting the throw
+		// printed a warning on nearly every command while the data was correct. The
+		// only thing worth telling a caller is that the directory is still there,
+		// which is checked below.
 	}
 	// The same removal the acquire path uses: rmdir alone leaves a directory that
 	// holds one stray file behind, and that is the state a later command reads as
 	// busy.
 	await forceRemove(lockPath);
+	// The check that matters: does a later command have to wait on this?
+	const stillThere = await stat(lockPath).then(
+		() => true,
+		() => false,
+	);
+	if (stillThere)
+		failure = new CliError("busy", "The workspace lock was left behind", {
+			hint: `Remove ${lockPath} before the next command, or wait for it to be reclaimed.`,
+		});
 	return failure;
 }
 

@@ -40,9 +40,9 @@ dy skill install
 dy update --check
 ```
 
-告诉你三件事：这份是怎么装的（`checkout` / `npm-global` / `npm-local` / `managed-release`）、是哪个 commit 构建的、有没有更新的。
+告诉你四件事：这份是怎么装的（`checkout` / `npm-global` / `npm-local` / `managed-release`）、版本号、是哪个 commit 构建的、有没有更新的。
 
-**版本号永远是 0.1.0，别用它判断新旧。** 用 commit。
+**判断新旧用 `behind`。** 版本号告诉你跨了几层功能，但一层里可能有几十个提交，所以只有 commit 能回答「我是不是最新的」。
 
 按 `update` 字段给的命令更新。通常是：
 
