@@ -164,7 +164,9 @@ export function validate(operation: string, raw: Input): Input {
 	for (const [key, minimum, maximum] of [
 		["limit", 1, 1000],
 		["scrolls", 0, 100],
-		["frames", 1, 60],
+		// video.digest documents 0 as "skip seeking", so its floor is 0 while
+		// video.observe still needs at least one frame to have a sample at all.
+		["frames", operation === "video.digest" ? 0 : 1, 60],
 		["steps", 1, 10],
 		["index", 1, 50],
 		["offset", 0, 1000000],

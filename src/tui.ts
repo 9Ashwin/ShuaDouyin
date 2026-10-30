@@ -165,6 +165,15 @@ export class TerminalUI {
 						{ value: "user", label: "用户主页" },
 						{ value: "history", label: "操作记录与收据" },
 						{ value: "knowledge", label: "人格、记忆与日报", description: "工作区文档、记忆检索和产物管理" },
+						{ value: "persona", label: "人格进化", description: "按写过的评论长出一节、存版本、回滚" },
+						{ value: "learn", label: "学到的东西", description: "把这轮的经验记下来，读已经记下的" },
+						{ value: "voice", label: "文风自查", description: "看一段文字哪里像机器写的" },
+						{ value: "live", label: "直播", description: "读直播间、发弹幕、送礼" },
+						{ value: "social", label: "关系", description: "目标、候选、卡片和结果" },
+						{ value: "browse", label: "浏览轮次", description: "开一轮、记看过和划过的、收尾" },
+						{ value: "note", label: "图文作品", description: "读图文帖的每一页" },
+						{ value: "link", label: "解析链接", description: "把分享文案或链接解析成作品 ID" },
+						{ value: "share-work", label: "分享当前作品", description: "选收件人、看分享结果" },
 						{ value: "setup-owner", label: "设定人格与用户档案" },
 						{ value: "quit", label: "退出" },
 					],
@@ -182,6 +191,21 @@ export class TerminalUI {
 					commands = COMMANDS.filter((command) =>
 						/^(workspace|memory|context|report|onboarding|growth)\./.test(command.id),
 					);
+				// These three groups were reachable only from the command line. The menu
+				// is built by matching prefixes, so a group nobody added a prefix for is
+				// invisible here however well it works from a shell — and a test that
+				// walks COMMANDS is what keeps the next one from being missed too.
+				if (selected === "persona") commands = COMMANDS.filter((command) => /^persona\./.test(command.id));
+				if (selected === "learn") commands = COMMANDS.filter((command) => /^learn\./.test(command.id));
+				if (selected === "voice") commands = COMMANDS.filter((command) => /^voice\./.test(command.id));
+				if (selected === "live") commands = COMMANDS.filter((command) => /^live\./.test(command.id));
+				if (selected === "social") commands = COMMANDS.filter((command) => /^social\./.test(command.id));
+				if (selected === "browse") commands = COMMANDS.filter((command) => /^browse\./.test(command.id));
+				if (selected === "note") commands = COMMANDS.filter((command) => /^note\./.test(command.id));
+				if (selected === "link") commands = COMMANDS.filter((command) => /^link\./.test(command.id));
+				// forward and share are two halves of one job — sending the current work
+				// to someone — so they share a submenu.
+				if (selected === "share-work") commands = COMMANDS.filter((command) => /^(forward|share)\./.test(command.id));
 				const id =
 					commands.length === 1
 						? commands[0].id
