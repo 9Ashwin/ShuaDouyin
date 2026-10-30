@@ -452,12 +452,17 @@ dy receipt get <request-id>
 dy diagnostics           # 反复失败的命令、变慢的命令
 dy diagnostics-ack <command> [--error-code …]
 dy page facts            # 页面此刻真实的状态和标记
-dy source                # 只有你在开发 dy 时才用：源码目录在哪
 dy update                # 怎么装的、是哪一版、要不要更新
 dy update --check        # 问 GitHub 有没有更新的提交
 ```
 
-先读 `self-improvement.md`。
+日常用上面这些就够了。反复失败读 `self-improvement.md`。
+
+`dy source` 例外，它只对在开发 dy 的人有意义（告诉你源码目录在哪、哪个分支、有没有未提交改动）。正常使用不需要。
+
+```bash
+dy source                # 开发用
+```
 
 ## 看写操作进行到哪了
 
