@@ -154,3 +154,22 @@ test("a verification gate is reported as one, whatever kind it is", async () => 
 	assert.ok(source.includes("接收短信验证码"), "the SMS copy is the fallback when the class changes");
 	assert.ok(fixture.length > 0);
 });
+
+test("a fresh workspace is told its persona is unanswered, without being stopped", async (t) => {
+	// A block was tried first and was worse: someone who wants to look at a few
+	// videos before naming the bot would hit an error. The question travels with the
+	// answer instead, so the person can act on it or ignore it.
+	const { setupNotice } = await import("../src/app.ts");
+	const base = await mkdtemp(join(tmpdir(), "dy-setup-"));
+	t.after(() => rm(base, { recursive: true, force: true }));
+	await new App({ state_dir: base }).execute("init", { name: "ShuaDouyin" });
+	const pending = (await setupNotice(base)) as { status: string; ask: string[]; next: string } | null;
+	assert.ok(pending, "a pending workspace must carry the question");
+	assert.equal(pending.status, "pending");
+	// The two things to ask, and what to do with the answer.
+	assert.equal(pending.ask.length, 2);
+	assert.match(pending.next, /onboarding complete/);
+	// Answering stops it, whether the answer is "done" or "later".
+	await new App({ state_dir: base }).execute("onboarding.skip", {});
+	assert.equal(await setupNotice(base), null);
+});

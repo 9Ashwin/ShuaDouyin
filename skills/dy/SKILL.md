@@ -8,6 +8,29 @@ allowed-tools: Bash(dy:*) Bash(npx dy:*)
 
 `dy` 是本地能力工具。当前 agent 负责理解、判断、对话、总结与调度。用 `dy schema` 查看可用命令；尊重用户当前授权和已有账号状态。
 
+## 第一次用：先问人设
+
+新工作区里人格还是模板。这时候每个页面命令的返回里都会带一个 `setup` 字段：
+
+```json
+"setup": {
+  "status": "pending",
+  "ask": ["这个 bot 叫什么，说话什么调子？", "有什么事它绝对不能做？"],
+  "next": "…怎么保存人格…",
+  "why": "不回答的话，bot 会用通用助手的声音说话，而输出里没有任何东西会提示主人没被问过"
+}
+```
+
+**命令照常执行**，`setup` 只是搭在结果上。看到它就先问主人这两个问题，别等主人自己想起来。
+
+1. `dy workspace get AGENTS.md` 拿 revision
+2. 改完 `dy workspace set AGENTS.md --text-file <file> --if-match <revision>`
+3. `dy onboarding complete`
+
+主人说「以后再说」就跑 `dy onboarding skip`——跳过也是回答，之后不再提示。
+
+`setup` 只在新工作区出现。它没有拦你，是因为拦过一版：想先看几条视频再起名的人会被错误挡住，那比提示更糟。
+
 ## 先确认 dy 装好了
 
 ```bash

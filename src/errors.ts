@@ -37,6 +37,9 @@ function category(code: string): ErrorType {
 			"already_exists",
 			"revision_required",
 			"revision_conflict",
+			// The bot has no persona yet. This is the installation's own state, not a
+			// failure of the command, and it is answered by asking the owner.
+			"setup_required",
 			"account_mismatch",
 			"migration_pending",
 			// A gate that refused because of the installation's own recorded

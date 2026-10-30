@@ -62,6 +62,7 @@ import { write } from "./operations/write.ts";
 import { quiet, type Reproduce } from "./progress.ts";
 import { type BrowserConfig, Store } from "./store.ts";
 import type { VoiceProfile } from "./voice.ts";
+import { Workspaces } from "./workspace.ts";
 
 export type { Input } from "./operations/validate.ts";
 export { isWrite, resourceID, validate } from "./operations/validate.ts";
@@ -249,6 +250,10 @@ export class App {
 				const session = await this.chrome.connect(active, this.timeout, live ? "https://live.douyin.com" : undefined);
 				try {
 					const result = await this.read(session, operation, input, active);
+					// Every page answer carries the setup question until it is answered. It
+					// is attached here rather than deep inside each operation so no command
+					// has to remember, and so a command added later cannot forget.
+					const setup = await setupNotice(this.store.base);
 					if (operation === "chat.read" && this.store.bot_id) {
 						if (!result || typeof result !== "object")
 							throw new CliError("state_corrupt", "Chat read did not return a conversation window");
@@ -268,7 +273,7 @@ export class App {
 						};
 					}
 					if (!["status", "auth.status"].includes(operation)) await this.store.append(operation, result);
-					return result;
+					return setup && result && typeof result === "object" ? { ...result, setup } : result;
 				} catch (error) {
 					// Cancellation is the caller's choice and its outcome is not a
 					// finding about the command, so only a reached failure is recorded.
@@ -769,6 +774,29 @@ async function waitForProfileWorks(session: Session, signal: AbortSignal): Promi
 		await new Promise((resolve) => setTimeout(resolve, 150));
 		signal.throwIfAborted();
 	}
+}
+
+// The setup question, carried with the first answer instead of blocking it.
+//
+// A block was tried first and is wrong: someone who wants to look at a few videos
+// before naming the bot would be stopped by an error, which is a worse experience
+// than a nudge they can act on or ignore. A gate also has to decide which commands
+// count, and every list like that is wrong at the edges.
+//
+// A notice rides along with whatever was asked for. The result the caller wanted is
+// still there; the missing setup is stated once, in the same envelope, with the two
+// questions to ask. It appears on every answer until the owner answers, because a
+// notice that appears once is one a caller can miss.
+export async function setupNotice(base: string): Promise<object | null> {
+	const state = await new Workspaces(base).onboarding().catch(() => null);
+	// `unknown` means the file is missing: a workspace that never ran init.
+	if (!state || state.status === "complete" || state.status === "skipped") return null;
+	return {
+		status: state.status,
+		ask: ["What should this bot be called, and how should it sound?", "What must it never do?"],
+		next: "Save the persona with `dy workspace get AGENTS.md` for the revision, `dy workspace set AGENTS.md --text-file <file> --if-match <revision>`, then `dy onboarding complete`. If the owner would rather decide later, run `dy onboarding skip`.",
+		why: "Until this is answered the bot browses and comments as a generic assistant. Nothing in the output would say the owner was never asked.",
+	};
 }
 
 function publicBrowser(state: { headless: boolean; pid: number; started_at: string }) {
