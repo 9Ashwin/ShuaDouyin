@@ -50,7 +50,6 @@ export function knowledgeOperation(operation: string): boolean {
 		operation === "init" ||
 		operation === "guide" ||
 		operation === "chat.history" ||
-		operation.startsWith("social.") ||
 		operation.startsWith("browse.") ||
 		operation === "diagnostics" ||
 		operation === "diagnostics-ack" ||
@@ -60,6 +59,10 @@ export function knowledgeOperation(operation: string): boolean {
 		// possible answer was "Unknown operation".
 		operation.startsWith("persona.") ||
 		operation.startsWith("learn.") ||
+		// social.response reads the page, so it must not be claimed as local: the
+		// prefix rule would have made it fall through here and report "unknown
+		// workspace operation" instead of reaching the browser.
+		(operation.startsWith("social.") && operation !== "social.response") ||
 		operation === "voice.check" ||
 		/^(bot|workspace|memory|context|report|onboarding|growth)\./.test(operation)
 	);

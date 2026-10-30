@@ -1273,6 +1273,29 @@ export const COMMANDS: CommandSpec[] = [
 			"Each source needs person, name, where, source and context. Candidates exclude people already on a relationship card, and each one carries the evidence behind it plus what that evidence does not prove. This command does not crawl: it judges what the caller already read.",
 	},
 	{
+		id: "social.response",
+		description: "Read whether anything came back after this account wrote",
+		flags: [
+			{
+				key: "conversation_id",
+				name: "--conversation-id <id>",
+				description: "Stable ID from chat list",
+				type: "string",
+				required: true,
+			},
+			{
+				key: "limit",
+				name: "--limit <count>",
+				description: "Messages to consider, 1..50",
+				type: "number",
+				default: 30,
+			},
+		],
+		effect: "read",
+		guidance:
+			"The one part of the social loop that is a fact rather than a judgement: either an incoming message follows one of this account's messages or it does not. Reports how many were answered, which are still hanging with how long they have waited, the median reply delay, and whether the loaded window is only outgoing. It does not read what a reply said and does not decide whether the relationship moved — social stage still refuses to infer that. 'Unanswered' means nothing loaded after it, not that nobody ever replied.",
+	},
+	{
 		id: "social.stage",
 		description: "Record where a relationship stands, and what you want from it",
 		argument: { key: "resource", name: "person", description: "Stable person ID" },

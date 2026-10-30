@@ -357,6 +357,7 @@ dy context show --query "…" [--profile-ref user:<id>]
 dy social goal --text "…" --stages "…" --daily-limit 5
 dy social signal [--sources …]        # 从已读文本里找明确的需求表达
 dy social discover [--goal <id>]      # 变成候选，附理由
+dy social response --conversation-id <id>  # 我发的有没有人回，等了多久
 dy social stage <person> --stage …
 dy social relation <person> / list
 dy social followup <person> --topic … --due <日期>

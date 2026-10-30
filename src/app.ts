@@ -46,6 +46,7 @@ import {
 } from "./operations/navigation.ts";
 import { type Phrase, phraseMemories, phraseMemoryText, usePhrase } from "./operations/phrases.ts";
 import { userRelations } from "./operations/relations.ts";
+import { observeResponse } from "./operations/response-window.ts";
 import { skillInstall, skillStatus } from "./operations/skill.ts";
 import { checkGoalQuota, pauseState } from "./operations/social.ts";
 import { sourceCheckout } from "./operations/source.ts";
@@ -673,6 +674,11 @@ export class App {
 					{ ...input, relation: operation === "user.following" ? "following" : "followers" },
 					signal,
 				);
+			case "social.response":
+				return observeResponse(session, input.conversation_id ?? "", {
+					limit: input.limit,
+					signal,
+				});
 			case "user.get": {
 				await navigate(session, `https://www.douyin.com/user/${input.user_id}`, "profile", signal);
 				// The work grid fills in after the header. Reading as soon as the
