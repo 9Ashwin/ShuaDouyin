@@ -59,7 +59,24 @@ export async function navigate(session: Session, url: string, kind: string, sign
 						// the caller read a page whose header has not appeared yet.
 						!!state.url?.includes("/user/") && state.page_kind === "profile",
 		signal,
-	);
+	).catch((error: unknown) => {
+		// A profile that redirects elsewhere is a real answer, not a changed selector:
+		// Douyin sends restricted or unavailable accounts to the search page. Saying
+		// "the page did not reach the expected state" hides which of the two happened
+		// and sends the caller looking for a broken selector.
+		// Only when the page actually went somewhere else. A profile that simply took
+		// too long is a different answer, and calling it "not found" would send the
+		// caller looking for a restricted account that is fine.
+		if (kind === "profile" && error instanceof CliError && error.code === "selector_changed") {
+			const landed = String((error.details as { url?: unknown } | undefined)?.url ?? "");
+			if (landed && !landed.includes("/user/"))
+				throw new CliError("not_found", "This profile redirected elsewhere", {
+					hint: "Douyin sent this account somewhere other than its profile: it may be restricted, deleted, or require a fresh login. Run dy auth status, or open one of their works with dy video open.",
+					details: { requested: url, landed },
+				});
+		}
+		throw error;
+	});
 }
 
 // The recommended feed lives at https://www.douyin.com/?recommend=1, but a
