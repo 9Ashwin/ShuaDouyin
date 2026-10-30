@@ -62,7 +62,10 @@ test("TUI navigation edits the shared browser config and restores the terminal",
 	assert.match(terminalText(ui.root.render(80).join("\n")), /终端工作台/);
 	terminal.send("\r");
 	await delay(5);
-	for (let index = 0; index < 4; index++) terminal.send("\u001b[B");
+	// browser configure sits one row lower than it used to: browser clean was added
+	// above it. Counting rows is fragile and this is the smallest thing that keeps
+	// the test measuring what it was written to measure.
+	for (let index = 0; index < 5; index++) terminal.send("\u001b[B");
 	terminal.send("\r");
 	await delay(5);
 	assert.match(terminalText(ui.root.render(80).join("\n")), /browser configure/);

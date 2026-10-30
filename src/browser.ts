@@ -6,6 +6,7 @@ import { delimiter, isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { type Browser, chromium, type Page } from "playwright-core";
 import { CliError, isMissing } from "./errors.ts";
+import { cleanIfLarge } from "./operations/clean.ts";
 import type { Store } from "./store.ts";
 
 export interface BrowserState {
@@ -159,6 +160,12 @@ export class ChromeManager {
 		}
 		const executable = await findChrome(this.chrome ?? config.chrome ?? process.env.DY_CHROME_PATH);
 		const profile = this.store.path("chrome");
+		// Before Chrome opens, and only when the directory has grown past a threshold.
+		// A running Chrome rewrites the caches it holds open, so this is the one moment
+		// removing them costs nothing — and the directory has no other bound: a few
+		// days of browsing reached 1.5G, nearly all of it cache.
+		const reclaimed = await cleanIfLarge(this.store.base).catch(() => null);
+		if (reclaimed?.ran) process.stderr.write(`${JSON.stringify({ ok: true, notice: reclaimed.reason })}\n`);
 		await mkdir(profile, { recursive: true, mode: 0o700 });
 		const portFile = join(profile, "DevToolsActivePort");
 		try {

@@ -193,6 +193,7 @@ dy onboarding show              # 读引导状态
 dy auth login                   # 扫码登录（有头 Chrome）
 dy auth status
 dy browser start / stop / status
+dy browser clean                # 回收磁盘：缓存和截图，不碰登录
 dy diagnostics                  # 反复失败的命令
 dy page facts                   # 页面此刻真实的状态
 dy update --check               # 有没有新版本

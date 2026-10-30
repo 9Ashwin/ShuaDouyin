@@ -457,6 +457,8 @@ dy diagnostics-ack <command> [--error-code …]
 dy page facts            # 页面此刻真实的状态和标记
 dy update                # 怎么装的、是哪一版、要不要更新
 dy update --check        # 问 GitHub 有没有更新的提交
+dy browser clean         # 看缓存和截图占了多少，可回收多少
+dy browser clean --apply # 真的删掉（不碰登录和记录）
 ```
 
 日常用上面这些就够了。反复失败读 `self-improvement.md`。

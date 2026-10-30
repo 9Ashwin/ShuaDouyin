@@ -10,6 +10,7 @@ import { captureChatImage, listChats, readChat } from "./operations/chat.ts";
 import { compareChatWindows } from "./operations/chat-diff.ts";
 import { chatHistory } from "./operations/chat-history.ts";
 import { sendChatImage } from "./operations/chat-image.ts";
+import { CLEAN_LIMITS, clean } from "./operations/clean.ts";
 import { deleteComment } from "./operations/comment-delete.ts";
 import { sendCommentImage } from "./operations/comment-image.ts";
 import {
@@ -348,6 +349,15 @@ export class App {
 					if (error instanceof CliError && error.code === "browser_not_running") return { running: false };
 					throw error;
 				}
+			case "browser.clean": {
+				const result = await clean(this.store.base, { write: input.apply === true });
+				return {
+					...result,
+					freed_mb: Math.round(result.freed / 1024 / 1024),
+					applied: input.apply === true,
+					limits: CLEAN_LIMITS,
+				};
+			}
 			case "browser.stop":
 				await this.chrome.stop(signal);
 				return { stopped: true };

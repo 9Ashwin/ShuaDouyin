@@ -653,6 +653,22 @@ export const COMMANDS: CommandSpec[] = [
 	},
 	{ id: "browser.status", description: "Check whether dedicated Chrome is reachable", effect: "read" },
 	{ id: "browser.stop", description: "Close dedicated Chrome and preserve login data", effect: "local" },
+	{
+		id: "browser.clean",
+		description: "Reclaim disk space from caches and screenshots, never from the login or the record",
+		flags: [
+			{
+				key: "apply",
+				name: "--apply",
+				description: "Actually delete; without it this only reports sizes",
+				type: "boolean",
+				default: false,
+			},
+		],
+		effect: "local",
+		guidance:
+			"The state directory grows without bound and none of the growth is bot data: on a machine used for a few days it reached 1.5G, of which 1.2G was Chrome's HTTP cache and 104M was screenshots. This removes Chrome's caches and the captures directory, and nothing else. Cookies, Login Data, Local Storage, IndexedDB, the event log, receipts, memories, the persona and snapshots are never touched — they hold the login and the record of what this bot did. Run without --apply to see what it would free. Close Chrome first: a running browser rewrites the caches it holds open, so cleaning under it frees less and can confuse it.",
+	},
 	{ id: "browser.config", description: "Show browser preferences for this profile", effect: "read" },
 	{
 		id: "browser.configure",
