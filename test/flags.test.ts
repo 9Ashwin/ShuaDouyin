@@ -124,6 +124,18 @@ test("a dry run over a local command writes nothing", async (t) => {
 	assert.equal(JSON.parse(after.stdout).data.revision, JSON.parse(before.stdout).data.revision);
 });
 
+test("video digest accepts --frames 0, which is what its own help promises", async () => {
+	// video.digest's flag description, its guidance and digest.ts all document 0
+	// as "skip seeking", but validate.ts applied one frames floor of 1 to every
+	// command, so the documented value was rejected before the handler saw it.
+	// Reading comments without sampling was impossible from the CLI.
+	const { validate } = await import("../src/operations/validate.ts");
+	assert.equal(validate("video.digest", { frames: 0 }).frames, 0);
+	assert.throws(() => validate("video.digest", { frames: -1 }), /frames must be an integer from 0 to 60/);
+	// observe needs at least one frame to have a sample at all, so its floor stays.
+	assert.throws(() => validate("video.observe", { frames: 0 }), /frames must be an integer from 1 to 60/);
+});
+
 test("a verification gate is reported as one, whatever kind it is", async () => {
 	// The SMS gate this session hit was invisible to the detector, which only knew
 	// the slider captcha. That is why a comment that had posted looked absent: the
