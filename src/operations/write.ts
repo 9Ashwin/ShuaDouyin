@@ -161,6 +161,18 @@ export async function write(
 			authorID = workAuthorID;
 			step("opening_comments", { video_id: input.video_id ?? null });
 			await openComments(session, input, signal);
+			// A work whose author closed comments still shows the ones already there,
+			// so nothing upstream can tell "this is a work with a comment box" from
+			// "this is a work with a list and no box". Asking now is what turns a
+			// silent eight-second wait into an answer: without it the send typed into
+			// nothing, measured a zero-size button and reported delivery_uncertain —
+			// which says the comment may exist when in fact it never could.
+			const writable = await session.call<{ writable: boolean; reason: string | null }>("comment.writable", {});
+			if (!writable.writable)
+				throw new CliError("unsupported_page", writable.reason ?? "This work does not accept comments", {
+					hint: "Nothing was typed or sent. Pick a work whose comment box is present.",
+					details: { video_id: input.video_id ?? null, writable: false },
+				});
 			// The composer may already be in this comment's reply state, in which
 			// case its reply control has become 回复中 and is no longer clickable.
 			if (input.comment_id && !(await replyComposerReady(session, input.comment_id, signal))) {

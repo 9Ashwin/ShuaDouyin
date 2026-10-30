@@ -15,7 +15,15 @@ import {
 	prepareCommentImage,
 	prepareCommentImageConfirmation,
 } from "./comment-image.ts";
-import { commentAuthor, commentRow, expandControl, pageTowardComment, readComments, replyState } from "./comments.ts";
+import {
+	commentAuthor,
+	commentID,
+	commentRow,
+	expandControl,
+	pageTowardComment,
+	readComments,
+	replyState,
+} from "./comments.ts";
 import {
 	clean,
 	detachMentions,
@@ -270,6 +278,31 @@ async function recordAudio(seconds: number) {
 		for (const track of stream.getTracks()) track.stop();
 	}
 }
+
+// The works a profile shows, read from its own grid.
+//
+// Two things made the obvious selector wrong. find() keeps only visible elements,
+// and the grid begins below the fold, so a profile with four works reported none.
+// And the page ends with a strip of recommended works that also link to /video/,
+// so taking every such link reported other people's videos as this account's.
+function readProfileWorks() {
+	const anchors = [...document.querySelectorAll<HTMLAnchorElement>('a[href*="/video/"]')].filter((anchor) => {
+		const box = anchor.getBoundingClientRect();
+		// A work card is a tile; a footer recommendation is one line of text about
+		// seventeen pixels tall. Size survives a class rename, and reading the whole
+		// page instead reported other people's videos as this account's.
+		return box.width >= 80 && box.height >= 80;
+	});
+	const works = new Map<string, { url: string; title: string }>();
+	for (const anchor of anchors) {
+		const id = /\/video\/(\d+)/.exec(anchor.getAttribute("href") ?? "")?.[1];
+		if (!id || works.has(id)) continue;
+		works.set(id, { url: anchor.href, title: clean(anchor.textContent) });
+	}
+	return [...works.values()];
+}
+
+let hoverPoint: { x: number; y: number } | null = null;
 
 async function execute(operation: string, args: Args & { seconds: number }) {
 	switch (operation) {
@@ -813,6 +846,101 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			scroller.scrollBy(0, args.pixels ?? 600);
 			return { before, after: scroller.scrollTop, moved: scroller.scrollTop !== before };
 		}
+		case "comment.delete.open": {
+			// Find this account's own comment by its exact id, hover it so the row
+			// reveals its menu button, and open that menu. Nothing is deleted here;
+			// the click on 删除评论 is a separate, armed action.
+			guardVideo(args.video_id);
+			const self = authenticatedUser();
+			if (!self) fail("login_required", "Deleting a comment needs the signed-in identity");
+			const row = findRendered(document, '[data-e2e="comment-item"]').find(
+				(element) => commentID(element) === args.comment_id,
+			);
+			// A row that is not loaded cannot be checked, and acting on an id the page
+			// never showed is how the wrong comment gets deleted.
+			if (!row)
+				fail("not_found", "That comment is not in the loaded list", "Scroll it into view or open its work first.");
+			const comments = readComments(args.video_id ?? "");
+			const record = comments.find((comment) => comment.id === args.comment_id);
+			// The page does not ask for confirmation, so this check is the only thing
+			// standing between the command and deleting someone else's comment.
+			if (!record || !record.mine)
+				fail(
+					"identity_mismatch",
+					"That comment is not this account's own",
+					JSON.stringify({ comment_id: args.comment_id }),
+				);
+			const box = row.getBoundingClientRect();
+			if (box.width === 0 || box.height === 0) fail("selector_changed", "The comment row is not laid out");
+			hoverPoint = { x: Math.round(box.x + box.width * 0.5), y: Math.round(box.y + box.height / 2) };
+			return { hover: hoverPoint, comment_id: record.id, text: record.text };
+		}
+		case "comment.delete.menu": {
+			// Called after the caller has hovered the row: the menu button only exists
+			// while it is hovered, so it cannot be found before that.
+			const row = findRendered(document, '[data-e2e="comment-item"]').find(
+				(element) => commentID(element) === args.comment_id,
+			);
+			if (!row) fail("selector_changed", "The comment row is no longer rendered");
+			const dots = [...row.querySelectorAll<HTMLElement>("*")].filter((element) => {
+				const text = clean(element.textContent);
+				const rect = element.getBoundingClientRect();
+				return (text === "..." || text === "…") && rect.width > 0 && rect.height > 0 && !element.childElementCount;
+			});
+			const button = one(dots, "comment menu button");
+			return point(button, args.token ?? "comment-menu");
+		}
+		case "comment.delete.item": {
+			// The delete entry in the open menu. Its text is the only stable handle:
+			// the menu has no data-e2e and its classes are per-build.
+			const items = [...document.querySelectorAll<HTMLElement>("div,span,li,button")].filter((element) => {
+				if (element.childElementCount) return false;
+				const text = clean(element.textContent);
+				if (text !== "删除评论") return false;
+				const rect = element.getBoundingClientRect();
+				return rect.width > 0 && rect.height > 0;
+			});
+			if (!items.length) fail("selector_changed", "The delete entry is not in the open menu");
+			return point(items[items.length - 1] as HTMLElement, args.token ?? "comment-delete");
+		}
+		case "comment.delete.state": {
+			// Whether the row is still there. Deletion happens without a confirmation,
+			// so the only proof is that the row is gone.
+			const present = findRendered(document, '[data-e2e="comment-item"]').some(
+				(element) => commentID(element) === args.comment_id,
+			);
+			return { present, comment_id: args.comment_id };
+		}
+		case "comment.writable": {
+			// Whether this work accepts a new comment, asked before anything is typed.
+			//
+			// A work whose author turned comments off still shows the existing ones, so
+			// "the list has rows" says nothing about whether posting is possible. The
+			// composer is the answer: Douyin does not render it at all when the author
+			// has closed comments, and the publish icon stays display:none when the box
+			// is empty. Without this check the send path filled nothing, measured a
+			// zero-size control, waited out its whole confirmation window and reported
+			// delivery_uncertain — which reads like "it may have gone through" when in
+			// fact nothing could ever have been sent.
+			const composer =
+				document.querySelector<HTMLElement>(".comment-input-container,.comment-input-inner-container") ??
+				document.querySelector<HTMLElement>(".public-DraftEditor-content");
+			if (!composer) {
+				const text = (document.body.innerText ?? "").slice(-4000);
+				return {
+					writable: false,
+					reason: /关闭评论|无法评论|禁止评论|评论功能已?关闭/.test(text)
+						? "The author has turned comments off for this work"
+						: "This page renders no comment composer",
+				};
+			}
+			const box = composer.getBoundingClientRect();
+			if (box.width === 0 || box.height === 0)
+				return { writable: false, reason: "The comment composer is not laid out" };
+			return { writable: true, reason: null };
+		}
+		case "profile.works":
+			return { works: readProfileWorks().length };
 		case "user.get": {
 			const id = userIdentity(args.user_id);
 			// The page nests two matches: an outer container that spans the whole profile
@@ -838,10 +966,15 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 				name: clean(root.querySelector('[data-e2e="user-title"],[data-e2e="user-name"]')?.textContent) || firstLine,
 				bio: clean(root.querySelector('[data-e2e="user-signature"]')?.textContent) || lastLine,
 				visible_text: root.innerText.slice(0, 5000),
-				videos: find<HTMLAnchorElement>(document, 'a[href*="/video/"]').map((element) => ({
-					url: element.href,
-					title: clean(element.textContent),
-				})),
+				// The work grid starts below the fold, and find() keeps only what is
+				// visible, so a profile reporting four works returned none. Laid out is
+				// the right test here: a card the reader has to scroll to is still a work
+				// this account published.
+				//
+				// The page also ends with a strip of recommended works that link to
+				// /video/ too, so filtering by the grid's own container is what keeps the
+				// list from reporting other people's videos as this account's.
+				videos: readProfileWorks(),
 			};
 		}
 		case "scroll": {

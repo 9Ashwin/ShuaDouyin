@@ -143,6 +143,7 @@ dy comment voice [--limit 20 --save]             # 学这个区怎么写
 dy comment voice --known                         # 看已经学过的区
 dy comment phrases                               # 哪些句式还能用
 dy comment phrases --use "下次一起唱"             # 记一次使用
+dy comment delete --comment-id <id> --confirm     # 删自己发的一条，不可撤销
 dy comment close                                 # 关掉评论面板
 ```
 

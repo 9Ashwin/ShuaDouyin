@@ -1029,6 +1029,30 @@ export const COMMANDS: CommandSpec[] = [
 			"Expands only the requested loaded parent. Returned replies are a bounded DOM view, not a complete thread; ambiguous controls stop the operation.",
 	},
 	{
+		id: "comment.delete",
+		description: "Delete one of this account's own comments",
+		flags: [
+			{ ...video, required: true },
+			{
+				key: "comment_id",
+				name: "--comment-id <id>",
+				description: "Exact ID of a comment this account wrote",
+				type: "string",
+				required: true,
+			},
+			{
+				key: "confirm",
+				name: "--confirm",
+				description: "Acknowledge that deleting cannot be undone",
+				type: "boolean",
+				default: false,
+			},
+		],
+		effect: "account_write",
+		guidance:
+			"Deletes one comment and cannot be undone: the page asks for no confirmation, so this command is the only check there is. It refuses unless the loaded row carries this account's own identity, so a display name or a nearby ID cannot be used to delete someone else's. The row must already be visible in the loaded list; a comment further down is not hunted for, because acting on an id the page did not show is how the wrong row gets deleted. Requires --request-id, and the response reports whether the row is gone afterwards.",
+	},
+	{
 		id: "comment.image",
 		description: "Post one local image as a top-level comment",
 		flags: [

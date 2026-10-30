@@ -10,6 +10,7 @@ import { captureChatImage, listChats, readChat } from "./operations/chat.ts";
 import { compareChatWindows } from "./operations/chat-diff.ts";
 import { chatHistory } from "./operations/chat-history.ts";
 import { sendChatImage } from "./operations/chat-image.ts";
+import { deleteComment } from "./operations/comment-delete.ts";
 import { sendCommentImage } from "./operations/comment-image.ts";
 import {
 	closeComments,
@@ -177,6 +178,23 @@ export class App {
 					} finally {
 						await session.close();
 					}
+				}
+				// Deleting runs before the generic write path: the page takes no
+				// confirmation, so its own receipt and identity checks are the whole
+				// guarantee, and it does not share the composer settlement.
+				if (operation === "comment.delete") {
+					// Without --confirm this must not fall through to the generic write
+					// path: that path fills a composer and presses publish, which is a
+					// different operation entirely and failed as "not in reply state".
+					if (!input.confirm)
+						throw new CliError("invalid_argument", "Deleting cannot be undone; pass --confirm", {
+							hint: "The page asks for no confirmation, so this flag is the only one there is.",
+						});
+					return deleteComment(input, active, {
+						store: this.store,
+						chrome: this.chrome,
+						timeout: this.timeout,
+					});
 				}
 				if (isWrite(operation)) {
 					// A failed send used to leave no trace: only the read path recorded
@@ -655,9 +673,15 @@ export class App {
 					{ ...input, relation: operation === "user.following" ? "following" : "followers" },
 					signal,
 				);
-			case "user.get":
+			case "user.get": {
 				await navigate(session, `https://www.douyin.com/user/${input.user_id}`, "profile", signal);
+				// The work grid fills in after the header. Reading as soon as the
+				// navigation settles returned a profile with zero works while the tab
+				// strip beside it said four, so the read waits for a card to exist —
+				// and reports the empty list when a profile genuinely has none.
+				await waitForProfileWorks(session, signal);
 				return session.call(operation, input);
+			}
 			case "page.scroll":
 				return session.call("scroll", input);
 			case "video.screenshot":
@@ -676,6 +700,19 @@ export class App {
 			default:
 				throw new CliError("invalid_argument", `Unknown operation: ${operation}`);
 		}
+	}
+}
+
+// A profile's work grid fills in a moment after its header. Waiting for it is
+// what makes "this account has four works" different from "this account's works
+// have not rendered yet" — the read cannot tell them apart on its own.
+async function waitForProfileWorks(session: Session, signal: AbortSignal): Promise<void> {
+	const deadline = Date.now() + 5000;
+	while (Date.now() < deadline) {
+		const state = await session.call<{ works: number }>("profile.works").catch(() => ({ works: 0 }));
+		if (state.works > 0) return;
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		signal.throwIfAborted();
 	}
 }
 

@@ -28,11 +28,16 @@ export interface DigestFrame {
 // Long works earn more samples; a nine-second clip is its own summary. The
 // fractions avoid the opening (usually a title card) and the end (usually a
 // call to follow), which are the two least informative parts of a short video.
-function samplePositions(duration: number, wanted: number): number[] {
+export function samplePositions(duration: number, wanted: number): number[] {
 	if (!Number.isFinite(duration) || duration <= 0) return [];
+	// A work under fifteen seconds is its own summary.
 	if (duration < 15) return [];
+	// Under forty-five seconds one frame in the middle is enough, and it must be
+	// the middle whatever count was asked for: the old code took the second
+	// element of a one-element list when --frames 2 was passed, so a 15–45 second
+	// work sampled nothing at all and said so only through an empty array.
+	if (duration < 45) return [duration * 0.5];
 	const fractions = wanted >= 3 ? [0.25, 0.5, 0.75] : [0.5];
-	if (duration < 45) return fractions.slice(1).map((f) => duration * f);
 	return fractions.slice(0, Math.max(1, wanted)).map((f) => duration * f);
 }
 

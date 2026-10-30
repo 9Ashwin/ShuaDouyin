@@ -184,19 +184,35 @@ export function point(element: HTMLElement, token: string): Point {
 	if (!(box.top >= 0 && box.bottom <= innerHeight && box.width > 0 && box.height > 0))
 		element.scrollIntoView({ block: "center", inline: "nearest" });
 	const disabled = !!element.closest(':disabled,[aria-disabled="true"]');
-	for (let attempt = 0; attempt < 10; attempt++) {
+	// A control can be present in the DOM and still have no size yet: the comment
+	// publish icon renders inside its container before it is painted, so a
+	// measurement taken at that moment is 0x0 and the press is refused. Ten tries
+	// over 800ms was not enough on a real page, and the failure said only that the
+	// control was hidden — which is why this cost a send twice without anything
+	// pointing at the wait.
+	let last = { width: 0, height: 0, covered: false };
+	for (let attempt = 0; attempt < 25; attempt++) {
 		const rect = element.getBoundingClientRect();
 		const x = rect.left + rect.width / 2;
 		const y = rect.top + rect.height / 2;
 		const hit = document.elementFromPoint(x, y);
-		const aimed = rect.width > 0 && rect.height > 0 && !!hit && (hit === element || element.contains(hit));
+		const sized = rect.width > 0 && rect.height > 0;
+		const aimed = sized && !!hit && (hit === element || element.contains(hit));
+		last = { width: Math.round(rect.width), height: Math.round(rect.height), covered: sized && !aimed };
 		if (aimed && !disabled) {
 			element.setAttribute("data-douyin-cli-control", token);
 			return { x, y, selector: `[data-douyin-cli-control="${token}"]` };
 		}
 		sleepSync(80);
 	}
-	fail("selector_changed", "Target control is hidden, disabled or covered");
+	// The three ways this fails need different reactions, so the message says which
+	// one happened rather than leaving the caller to guess.
+	const why = disabled
+		? "it is disabled"
+		: last.width === 0 || last.height === 0
+			? `it has no size (${last.width}x${last.height}); the page had two seconds to paint it`
+			: "something is covering it";
+	fail("selector_changed", `Target control is not clickable because ${why}`);
 }
 
 // The page adapter runs inside the page, where blocking briefly is the only way

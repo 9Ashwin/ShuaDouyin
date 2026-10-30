@@ -257,6 +257,9 @@ export async function openComments(session: Session, input: Input, signal: Abort
 			.waitFor({ state: "attached", timeout: 5000 });
 		await delay(150, undefined, { signal });
 	}
+	// A panel that is already open still has to be brought into view: on a work
+	// page it is attached from the start, so this returned early and left the
+	// composer below the fold — which is exactly the state that broke sends.
 	if (rows > 0) return;
 	const token = randomUUID();
 	await session.call("arm-comment-open", { ...input, token });

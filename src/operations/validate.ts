@@ -83,11 +83,15 @@ export interface Input {
 	event_id?: string;
 	budget?: number;
 	apply?: boolean;
+	// Deleting is irreversible and the page asks for no confirmation, so the caller
+	// has to say it means it.
+	confirm?: boolean;
 }
 
 export function isWrite(operation: string): boolean {
 	return [
 		"comment.post",
+		"comment.delete",
 		"comment.reply",
 		"comment.image",
 		"chat.send",
