@@ -173,3 +173,19 @@ test("a fresh workspace is told its persona is unanswered, without being stopped
 	await new App({ state_dir: base }).execute("onboarding.skip", {});
 	assert.equal(await setupNotice(base), null);
 });
+
+test("retryable says whether running it again could work", async () => {
+	// The field was hardcoded false, so it carried no information. What it should
+	// carry is the decision a caller has to make on failure.
+	const { retryable } = await import("../src/errors.ts");
+	// The page or the lease was not ready; the request itself was fine.
+	assert.equal(retryable("timeout"), true);
+	assert.equal(retryable("busy"), true);
+	assert.equal(retryable("browser_not_running"), true);
+	// Nothing about these changes on a second run.
+	assert.equal(retryable("invalid_argument"), false);
+	assert.equal(retryable("not_found"), false);
+	assert.equal(retryable("delivery_uncertain"), false);
+	// The one that covers both cases stays out: repeating a changed page is a loop.
+	assert.equal(retryable("selector_changed"), false);
+});

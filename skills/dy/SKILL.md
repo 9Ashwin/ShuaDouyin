@@ -8,6 +8,10 @@ allowed-tools: Bash(dy:*) Bash(npx dy:*)
 
 `dy` 是本地能力工具。当前 agent 负责理解、判断、对话、总结与调度。用 `dy schema` 查看可用命令；尊重用户当前授权和已有账号状态。
 
+**这份文件是常驻的，所以只放每次都用的东西。** 完整的命令说明、平台事实、各场景流程在 `dy guide` 里，它的内容和你的 `dy` 版本永远一致——本文件可能落后于一次更新。拿不准某个命令怎么用，先跑 `dy guide`，别猜。
+
+下面的命令列表够日常使用。遇到没列到的、或者行为和这里写的不一样，以 `dy guide` 和实际返回为准。
+
 ## 第一次用：先问人设
 
 新工作区里人格还是模板。这时候每个页面命令的返回里都会带一个 `setup` 字段：
@@ -65,120 +69,37 @@ dy video info                # 读当前作品
 
 ## 命令
 
-所有命令返回一个 `{ok:true,data}` 信封；失败是 `{ok:false,error}` 加非零退出。`dy schema` 给全部命令和参数，`dy <命令> --help` 给单个。
-
-### 刷与看
+日常这一组就够。参数细节、每个命令的坑、各场景的完整流程都在 `dy guide`。
 
 ```bash
-dy feed open                    # 打开推荐流
-dy feed next                    # 下一条；核实 ID 变了才算成功
-dy feed previous
-dy feed sweep --count 10        # 一次走 10 条，返回 id/作者/标题/时长
-```
-
-**`feed sweep` 是读一批的首选。** 一条命令、一次连接，`stopped` 说明为什么停下（`count_reached` / `steps_exhausted` / `feed_stuck`）。它不快多少（瓶颈是页面过渡，一次几秒），但一次拿全数据，不用逐条 `video info`。
-
-### 判断一条作品在讲什么
-
-```bash
-dy video digest                     # 标题 + 三个位置的画面 + 评论区摘要
-dy video digest --frames 0          # 只读评论，不采样
-dy video seek --at 120              # 跳到第 120 秒
-dy video observe --at 200 --seconds 4 --frames 2
-```
-
-`digest` 约 3–4 秒。三个位置是 25%/50%/75%，避开开头封面语和结尾求关注。实测一条 4 分钟英语视频，三帧字幕拼起来就是完整观点，比标题信息量大得多。
-
-`--frames 0` 只对 `digest` 有效，`observe` 至少要 1 帧。15 秒以下的作品不采样：`frames` 为空并附一条限制说明，那是设计如此，不是失败。`comments.count` 只数页面已加载的，同一条作品连读两次可能不一样。
-
-### 读作品与评论
-
-```bash
-dy video info                   # 当前作品的身份、播放状态、时长
+# 刷与看
+dy feed sweep --count 8         # 一次读一批：id/作者/标题/时长，首选
+dy feed next / previous
+dy video digest                 # 标题 + 采样画面 + 评论摘要；图集会逐页拍
 dy video open <id-or-url>
+
+# 评论
 dy comment list --limit 20      # 每条带 stance 和 likes
-dy comment replies --comment-id <id>
-dy comment delete --comment-id <id> --confirm   # 删自己发的一条，不可撤销
-dy page scroll --target comments --pixels 600
-```
-
-`comment list` 每条带 `stance`（`about_work` / `about_self` / `asking` / `spam` / `unknown`）和 `likes`。回之前看 stance，对着「在说自己」的评论夸「唱得好」是错位的。
-
-**它自己开的面板会自己关**，所以读完能直接 `feed next`。面板挡着翻页箭头时用 `dy comment close`。
-
-`comment delete` 只删自己的评论，别人的 id 会直接拒绝。**页面不会问你第二次**，点了就没，所以 `--confirm` 是唯一的闸。
-
-### 学这个区的写法
-
-```bash
-dy comment voice --limit 20     # 中位长度、感叹号习惯、称呼、人称、提问比例
-dy comment voice --save         # 连同句式一起存下来
-dy comment voice --known        # 已经学过的区，按形状归并
-dy comment phrases              # 哪些句式还能用
-dy comment phrases --use "…"    # 记一次使用
-```
-
-**按作品算，不按全局算。** 同一个号上，不同区的评论中位长度可以差好几倍：一个区可能七八个字，另一个区要写满四五十个字。所以别把上个区学到的语气带到这个区，每换一条作品重新量。
-
-具体数字每次都不一样，跑一次看 `profile.length.median`，不要信这里举例的数。
-
-`comment voice` 还给每条评论判 `has-wit` / `flat` / `generic-praise`，依据是接话、具体指认、反转三个维度，以及堆砌术语。实测一个区里 247 赞的是「下次一起唱」，150 字堆术语那条只有 2 赞，长度和赞数相关 -0.38。
-
-**句式用三次会自动标成 `spent`**，静默 14 天回来。别反复用同一条。
-
-### 写
-
-```bash
 dy comment post --video-id <id> --text "…" --request-id <唯一ID>
 dy comment reply --video-id <id> --comment-id <id> --text "…" --request-id <唯一ID>
-dy video like --video-id <id> --value true
-dy video favorite --video-id <id> --value true
-dy user follow --user-id <id> --value true
-```
+dy comment delete --comment-id <id> --confirm
+dy comment voice                # 这个区的写法：中位长度、标点、称呼
+dy voice check --text "…"       # 发之前自查像不像机器写的
 
-写入必须有 `--request-id`。加 `--progress` 看每一步走到哪，`dispatching` 是分水岭：之前失败什么都没发，之后不可逆。
+# 私信与关系
+dy chat list / read / send
+dy person read <id>             # 这个人发过什么、写过什么
+dy social response --conversation-id <id>   # 我发的有没有人回
+dy social advise <person> --conversation-id <id>  # 继续、等、还是停
 
-```bash
-dy --progress --request-id <id> chat send --conversation-id <id> --text "…"
-```
-
-### 直播
-
-```bash
-dy live info                    # 主播、开播状态、能否评论
-dy live chat --limit 20         # 当前加载的弹幕
-dy live say --text "…" --request-id <id>
-dy live gifts                   # 礼物和价格
-dy live gift --name 人气票 --price 1 --request-id <id>
-```
-
-礼物会花真钱，`--name` 和 `--price` 必须同时匹配。
-
-### 记忆
-
-```bash
-dy memory add --text "…" --source "user:…" --layer … --certainty …
-dy memory search <词>
-dy memory list
-dy memory candidates --text-file <文件>
-dy memory decide --text-file <文件> --apply --request-id <id>
+# 其他
+dy live info / chat / say
+dy memory add / search
 dy context show --query "…"
+dy ai ask --query "…"           # 问平台自己的 AI，当线索用
 ```
 
-### 起步与检查
-
-```bash
-dy auth login                   # 扫码登录（有头 Chrome）
-dy auth status
-dy browser start / stop / status
-dy browser clean                # 回收磁盘：缓存和截图，不碰登录
-dy diagnostics                  # 反复失败的命令
-dy page facts                   # 页面此刻真实的状态
-dy update --check               # 有没有新版本
-dy skill install                # 装 skill 到 agent 目录
-```
-
-其余的就：`dy init` 建工作区，`dy guide` 输出完整文档。`dy source` 只对开发 dy 的人有意义。
+**写入必须有 `--request-id`。** 加 `--progress` 看每步走到哪，`dispatching` 之后不可逆。
 
 ## 按任务读参考
 

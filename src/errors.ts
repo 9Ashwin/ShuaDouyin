@@ -78,6 +78,30 @@ export function errorExit(error: CliError): number {
 	}
 }
 
+// Whether running the same command again could reasonably work.
+//
+// The field was hardcoded false, so it told a caller nothing. The distinction it
+// should carry is the one that decides what to do next: a page that was mid-render
+// is worth one more try, and a changed selector is not — repeating it just spends
+// the same seconds for the same answer.
+//
+// `selector_changed` is deliberately in neither list. It is the one code that
+// covers both a transition and a genuine structural change, and the page adapter
+// already names which happened when it can ("no size", "covered", "not clickable").
+// Marking it retryable would turn a broken page into a loop.
+export function retryable(code: string): boolean {
+	return [
+		// The browser or the network was not ready; nothing about the request was wrong.
+		"timeout",
+		"browser_not_running",
+		"browser_unavailable",
+		// Another command held the lease. It has since finished.
+		"busy",
+		// The page had not finished laying out.
+		"editor_not_ready",
+	].includes(code);
+}
+
 export function errorData(error: unknown) {
 	const problem = normalizeError(error);
 	return {
@@ -85,7 +109,7 @@ export function errorData(error: unknown) {
 		code: problem.code,
 		message: problem.message,
 		...(problem.hint ? { hint: problem.hint } : {}),
-		retryable: false,
+		retryable: retryable(problem.code),
 		...(problem.details === undefined ? {} : { details: problem.details }),
 	};
 }
