@@ -25,9 +25,18 @@ export interface WriteResult {
 }
 
 function uncertain(key: string, receipt?: Receipt, cause?: unknown, reason?: string) {
+	// "Inspect the page" was the whole instruction, and it is not enough: a read
+	// taken while a verification mask covers the page returns a stale list, so a
+	// comment that did post looks absent and the natural next move is to send it
+	// again. That is how one comment became two. The hint now says what makes a
+	// look trustworthy before it is used to decide.
 	return new CliError("delivery_uncertain", "The operation may have reached Douyin; it was not repeated", {
-		hint: `Inspect receipt get ${key} and the actual page before taking another action.`,
-		details: { request_id: key, receipt, ...(reason ? { reason } : {}) },
+		hint: [
+			`Check that the page is not showing a verification or login gate — a read under one returns a stale list and says nothing about whether this landed.`,
+			`dy auth status reports verification_required for both the slider gate and the SMS gate.`,
+			`Only then read the page or run receipt get ${key}. A second request with a new id is a second message, not a retry.`,
+		].join(" "),
+		details: { request_id: key, receipt, ...(reason ? { reason } : {}), verify_before_retry: true },
 		cause,
 	});
 }
@@ -431,24 +440,41 @@ async function replyComposerReady(session: Session, commentID: string, signal: A
 // refused before this point, so anything in the composer at failure time is
 // residue from this attempt.
 async function clearComposer(session: Session, action = "chat.send"): Promise<void> {
-	// The chat composer is the one this function was written for. A comment
-	// failure left its text behind the same way, so the comment editor is cleared
-	// by the same rule: select the whole editor and delete, which the page's own
-	// editor handles as a user edit.
+	// Both composers are Draft.js editors, and a Draft.js content div carries
+	// contenteditable="false" — the library drives it through React, so the
+	// attribute says nothing about whether it can be typed into. Selecting on
+	// contenteditable="true" therefore found the chat editor (which sets it) and
+	// missed the comment editor entirely, which is why a failed comment left its
+	// text in the box and every later attempt on that work was refused as a draft
+	// conflict.
 	const editor =
 		action === "chat.send"
 			? session.tab
 					.locator(
-						'[data-e2e="im-dialog"] [data-e2e="msg-input"] [contenteditable="true"],[data-e2e="im-dialog"] [contenteditable="true"]',
+						'[data-e2e="im-dialog"] [data-e2e="msg-input"] [contenteditable="true"],[data-e2e="im-dialog"] .public-DraftEditor-content',
 					)
 					.first()
-			: session.tab.locator('[class*="comment-input"] [contenteditable="true"],[data-e2e="comment-input"]').first();
-	await editor.click({ timeout: 2000 }).catch(() => undefined);
+			: session.tab.locator('[class*="comment-input"] .public-DraftEditor-content,.public-DraftEditor-content').first();
+	const present = await editor.count().catch(() => 0);
+	if (!present) return;
+	await editor.click({ timeout: 3000 }).catch(() => undefined);
 	// One select-all, chosen by platform. Pressing both was tried and is wrong:
 	// on macOS the editor treats Control+A as a move-to-line-start, which drops
 	// the selection Meta+A had just made, and the Backspace then deleted nothing.
 	await session.tab.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A").catch(() => undefined);
 	await session.tab.keyboard.press("Backspace").catch(() => undefined);
+	// Clearing is a claim like any other, so it is checked: a page that ignored the
+	// keystrokes would otherwise leave the residue in place while the command
+	// reported that it had cleaned up.
+	const left = await editor.innerText().catch(() => "");
+	if (left.replace(/[\u200b\ufeff]/g, "").trim()) {
+		// A verification mask or another overlay can hold the click. Saying so is
+		// more useful than pretending the box is empty.
+		throw new CliError("draft_conflict", "The composer still holds text after clearing", {
+			hint: `Clear it by hand before retrying. It now reads: ${left.slice(0, 120)}`,
+			details: { remaining: left.slice(0, 200) },
+		});
+	}
 }
 
 // Typing @ opens the group member picker; choosing an entry turns it into a real

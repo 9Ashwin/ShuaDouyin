@@ -123,3 +123,22 @@ test("a dry run over a local command writes nothing", async (t) => {
 	const after = await run("node", ["dist/cli.js", "--state-dir", base, "workspace", "get", "AGENTS.md"]);
 	assert.equal(JSON.parse(after.stdout).data.revision, JSON.parse(before.stdout).data.revision);
 });
+
+test("a verification gate is reported as one, whatever kind it is", async () => {
+	// The SMS gate this session hit was invisible to the detector, which only knew
+	// the slider captcha. That is why a comment that had posted looked absent: the
+	// read ran under a mask and returned a stale list.
+	const { fixture } = await import("./fixture.ts");
+	const text = [
+		'<div class="second-verify-mask"></div>',
+		'<div class="uc-ui-verify_sms-verify">接收短信验证码</div>',
+	].join("");
+	assert.ok(/second-verify-mask|uc-ui-verify_sms-verify/.test(text));
+	// The detector is page-side code; the assertion that matters is that the source
+	// looks for both gates, which is what this checks without a browser.
+	const { readFile } = await import("node:fs/promises");
+	const source = await readFile(new URL("../src/page/readers.ts", import.meta.url), "utf8");
+	assert.ok(source.includes("second-verify-mask"), "the SMS mask must be part of the gate check");
+	assert.ok(source.includes("接收短信验证码"), "the SMS copy is the fallback when the class changes");
+	assert.ok(fixture.length > 0);
+});

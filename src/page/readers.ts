@@ -204,9 +204,15 @@ export function readPageState(includeText = false) {
 		.join("\n")
 		.slice(-9000);
 	const login = /扫码登录|验证码登录|登录后即可|手机扫码登录/.test(text);
+	// A second kind of gate exists: Douyin sometimes asks for an SMS code when it
+	// decides an action does not look human. It is a full-page mask, so a read that
+	// runs under it sees a stale list — and that is what made a comment look like
+	// it had never been posted while it was already on the page.
 	const verification =
 		find(document, '#captcha_container,[id^="captcha_container"],[data-e2e="captcha-container"]').length > 0 ||
-		/请完成下方验证|请完成验证|安全验证|拖动滑块/.test(text);
+		/请完成下方验证|请完成验证|安全验证|拖动滑块/.test(text) ||
+		find(document, ".second-verify-mask,.uc-ui-verify_sms-verify").length > 0 ||
+		/接收短信验证码|为确保是本人操作|请输入当前手机号/.test(text);
 	// Opening the comment panel scrolls the work out of view, but it is still the
 	// page's current work. Layout presence, not the viewport, identifies it.
 	const videos = findRendered<HTMLVideoElement>(document, "video").filter((element) => !element.closest(privateArea));
