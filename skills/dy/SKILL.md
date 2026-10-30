@@ -37,61 +37,7 @@ allowed-tools: Bash(dy:*) Bash(npx dy:*)
 dy --version
 ```
 
-有版本号就直接用。没有就装：
-
-```bash
-npm install -g shuadouyin
-```
-
-包叫 `shuadouyin`，命令叫 `dy`。**唯一需要的是本机已有的 Chrome**，不下载浏览器。装完 `dy init` 建工作区，`dy auth login` 扫码登录抖音。
-
-从源码装也行（会构建一次，几秒）：
-
-```bash
-npm install -g github:9Ashwin/ShuaDouyin
-```
-
-装 skill 到 agent 目录（可选，这样其他 agent 也能读到）：
-
-```bash
-npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
-```
-
-或者用 CLI 自己装：
-
-```bash
-dy skill install
-```
-
-### 更新 dy
-
-```bash
-dy update --check
-```
-
-告诉你四件事：这份是怎么装的（`checkout` / `npm-global` / `npm-local` / `managed-release`）、版本号、是哪个 commit 构建的、有没有更新的。
-
-**判断新旧用 `behind`。** 版本号告诉你跨了几层功能，但一层里可能有几十个提交，所以只有 commit 能回答「我是不是最新的」。
-
-按 `update` 字段给的命令更新。从 npm 装的：
-
-```bash
-npm install -g shuadouyin@latest
-```
-
-从源码装的：
-
-```bash
-npm install -g github:9Ashwin/ShuaDouyin@latest
-```
-
-**从源码装的话，不加 `@latest` 或 `--force` 会显示 up to date 而不更新**——npm 记录的是 commit，不是分支，它认为已经满足要求了。npm 包按版本号，没这个问题。
-
-更新完 skill 也要重装一次，否则 agent 读到的是旧说明：
-
-```bash
-npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
-```
+有版本号就直接用。没有、或者要更新、要装 skill 到别的 agent 目录，读 `references/setup.md`——那里有安装、更新和各种安装形态的说明。
 
 ## 每次开始对话，先读人格
 
@@ -241,6 +187,7 @@ dy guide                        # 这份文档的完整内容
 
 | 你在做什么 | 读 |
 | --- | --- |
+| 安装、更新、卸载、磁盘占用 | `references/setup.md` |
 | 不知道该用哪个命令 | `references/commands.md` |
 | 浏览、观察、评论、私信、分享、发图 | `references/browse-and-grow.md` |
 | 进直播间、发弹幕、送礼 | `references/live.md` |
