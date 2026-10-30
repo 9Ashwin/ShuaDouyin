@@ -86,6 +86,21 @@ function recurringPhrases(texts: string[]): { phrase: string; count: number }[] 
 		.map(([phrase, count]) => ({ phrase, count }));
 }
 
+// The page reports its work after the route settles. Waiting here is what keeps a
+// fresh navigation from being read as a page with no work on it.
+async function settleWork(session: Session, id: string, signal: AbortSignal): Promise<boolean> {
+	const deadline = Date.now() + 6000;
+	while (Date.now() < deadline) {
+		const state = await session
+			.call<{ video?: { id?: string }; note?: { id?: string } }>("video.info", {})
+			.catch(() => null);
+		if (state && (state.video?.id ?? state.note?.id ?? null) === id) return true;
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		signal.throwIfAborted();
+	}
+	return false;
+}
+
 // Waiting for the grid is what separates "this profile has no works" from "the
 // works have not rendered yet", and only the page can answer it.
 async function waitForWorks(session: Session, signal: AbortSignal): Promise<void> {
@@ -132,10 +147,26 @@ export async function readPerson(session: Session, input: Input, signal: AbortSi
 		// Each work has to be opened first: reading comments is guarded on being on
 		// a work page, and jumping there from the profile reported an identity
 		// mismatch rather than the comment list.
+		// One work at a time, and a failure on one does not lose the others. The
+		// first version let a single unreadable work end the whole read, which turned
+		// a partial answer into no answer.
 		await navigate(session, `https://www.douyin.com/video/${work.id}`, "video", signal);
-		const listed = (await listComments(session, { ...input, video_id: work.id, limit: 40 }, signal)) as {
-			items?: { text?: string; likes?: number | null; author_url?: string | null; stance?: string }[];
-		};
+		// The player reports its work a moment after the route changes. Reading
+		// comments starts with an identity check, so a read taken in that gap failed
+		// as "current work identity is missing" on a page that was about to be fine.
+		if (!(await settleWork(session, work.id, signal))) {
+			limits.push(`Work ${work.id} never reported itself as the current work, so its comments were not read.`);
+			continue;
+		}
+		let listed: { items?: { text?: string; likes?: number | null; author_url?: string | null; stance?: string }[] };
+		try {
+			listed = (await listComments(session, { ...input, video_id: work.id, limit: 40 }, signal)) as typeof listed;
+		} catch (error) {
+			limits.push(
+				`Comments under work ${work.id} could not be read (${error instanceof CliError ? error.code : "unknown"}).`,
+			);
+			continue;
+		}
 		for (const item of listed.items ?? []) {
 			// Only what this person wrote: the row's author id is the stable one, and a
 			// display name would pull in everyone who shares it.

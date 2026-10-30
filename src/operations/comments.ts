@@ -219,13 +219,20 @@ export function knownVoices(memories: Memory[]): unknown {
 // that was closed keeps its rows in the document, hidden, so a count said the
 // panel was open when it was not — and said it stayed open after closing. Only
 // layout decides.
+// Whether the panel is open, not whether any of it is on screen.
+//
+// This asked for visible comment rows, and on a work page the list is in the
+// document below the fold: rows existed, none were in the viewport, so this said
+// "closed", and opening tried to click an entry icon that had already been
+// replaced by an empty 0x0 box. Every comment read and send on that page then
+// failed with a control that could not be measured.
 async function panelVisible(session: Session): Promise<boolean> {
-	const visible = await session.tab
-		.locator('[data-e2e="comment-item"]')
-		.filter({ visible: true })
-		.count()
-		.catch(() => 0);
-	return visible > 0;
+	const list = session.tab.locator('[data-e2e="comment-list"],[data-e2e="comment-item"]');
+	const attached = await list.count().catch(() => 0);
+	if (!attached) return false;
+	// A list that is attached is enough: the panel is open. It is deliberately not
+	// a visibility test, because a panel below the fold is still open.
+	return true;
 }
 
 // Closing is the panel's own X. It is the second svg to the right of the tab
