@@ -167,6 +167,7 @@ test("every command group is reachable from the TUI", async (t) => {
 		"图文作品",
 		"解析链接",
 		"分享当前作品",
+		"看一个人",
 	];
 	for (const label of expected) assert.ok(menu.includes(label), `${label} missing`);
 	// Groups that exist in the catalog but are not for a terminal session: setup,
@@ -213,6 +214,7 @@ test("every command group is reachable from the TUI", async (t) => {
 		"voice",
 		"workspace",
 		"browse",
+		"person",
 	]);
 	const unaccounted = [...groups].filter((group) => !shellOnly.has(group) && !reachable.has(group));
 	assert.deepEqual(

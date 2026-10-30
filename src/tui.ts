@@ -170,6 +170,7 @@ export class TerminalUI {
 						{ value: "voice", label: "文风自查", description: "看一段文字哪里像机器写的" },
 						{ value: "live", label: "直播", description: "读直播间、发弹幕、送礼" },
 						{ value: "social", label: "关系", description: "目标、候选、卡片和结果" },
+						{ value: "person", label: "看一个人", description: "对方发过什么、写过什么" },
 						{ value: "browse", label: "浏览轮次", description: "开一轮、记看过和划过的、收尾" },
 						{ value: "note", label: "图文作品", description: "读图文帖的每一页" },
 						{ value: "link", label: "解析链接", description: "把分享文案或链接解析成作品 ID" },
@@ -200,6 +201,7 @@ export class TerminalUI {
 				if (selected === "voice") commands = COMMANDS.filter((command) => /^voice\./.test(command.id));
 				if (selected === "live") commands = COMMANDS.filter((command) => /^live\./.test(command.id));
 				if (selected === "social") commands = COMMANDS.filter((command) => /^social\./.test(command.id));
+				if (selected === "person") commands = COMMANDS.filter((command) => /^person\./.test(command.id));
 				if (selected === "browse") commands = COMMANDS.filter((command) => /^browse\./.test(command.id));
 				if (selected === "note") commands = COMMANDS.filter((command) => /^note\./.test(command.id));
 				if (selected === "link") commands = COMMANDS.filter((command) => /^link\./.test(command.id));

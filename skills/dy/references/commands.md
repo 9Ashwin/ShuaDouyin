@@ -359,6 +359,7 @@ dy social signal [--sources …]        # 从已读文本里找明确的需求�
 dy social discover [--goal <id>]      # 变成候选，附理由
 dy social response --conversation-id <id>  # 我发的有没有人回，等了多久
 dy social advise <person> --conversation-id <id>  # 下一步该继续、等、还是停，只提议
+dy person read <id-or-url>            # 看一个人发过什么、写过什么
 dy social stage <person> --stage …
 dy social relation <person> / list
 dy social followup <person> --topic … --due <日期>

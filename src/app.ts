@@ -45,6 +45,7 @@ import {
 	waitSnapshot,
 } from "./operations/navigation.ts";
 import { type Phrase, phraseMemories, phraseMemoryText, usePhrase } from "./operations/phrases.ts";
+import { readPerson } from "./operations/read-person.ts";
 import { userRelations } from "./operations/relations.ts";
 import { observeResponse } from "./operations/response-window.ts";
 import { skillInstall, skillStatus } from "./operations/skill.ts";
@@ -53,7 +54,7 @@ import { checkGoalQuota, pauseState } from "./operations/social.ts";
 import { advise, wouldSetStage } from "./operations/social-advice.ts";
 import { sourceCheckout } from "./operations/source.ts";
 import { updateReport } from "./operations/update.ts";
-import { type Input, isWrite, validate } from "./operations/validate.ts";
+import { type Input, isWrite, resourceID, validate } from "./operations/validate.ts";
 import { transcribeVoices } from "./operations/voice.ts";
 import { type VoiceRecord, voiceMemories, voiceMemoryText } from "./operations/voice-memory.ts";
 import { write } from "./operations/write.ts";
@@ -676,6 +677,9 @@ export class App {
 					{ ...input, relation: operation === "user.following" ? "following" : "followers" },
 					signal,
 				);
+			case "person.read":
+				input.user_id = resourceID(input.resource ?? "", "user");
+				return readPerson(session, input, signal);
 			case "social.advise": {
 				// Reads the conversation, then the card. Both are needed: the window
 				// says whether anything came back, and the card says who this person is

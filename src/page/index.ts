@@ -940,6 +940,9 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			return { writable: true, reason: null };
 		}
 		case "profile.works":
+			// Deliberately no guardVideo: this runs on a profile page, where there is
+			// no work to guard, and the guard's refusal was reported as an identity
+			// mismatch rather than as a profile that had simply not rendered yet.
 			return { works: readProfileWorks().length };
 		case "user.get": {
 			const id = userIdentity(args.user_id);

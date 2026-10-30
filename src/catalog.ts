@@ -1273,6 +1273,23 @@ export const COMMANDS: CommandSpec[] = [
 			"Each source needs person, name, where, source and context. Candidates exclude people already on a relationship card, and each one carries the evidence behind it plus what that evidence does not prove. This command does not crawl: it judges what the caller already read.",
 	},
 	{
+		id: "person.read",
+		description: "Read what one person published and wrote, as evidence with its source",
+		argument: { key: "resource", name: "id-or-url", description: "User sec_uid or canonical profile URL" },
+		flags: [
+			{
+				key: "limit",
+				name: "--limit <count>",
+				description: "Works to visit, 1..20",
+				type: "number",
+				default: 5,
+			},
+		],
+		effect: "navigation",
+		guidance:
+			"Discovery was ranking people on whether a topic string appeared in text the caller supplied, which says two people used the same word and nothing more. This reads the profile and what the person wrote under their own works, and returns it with the work each comment was under. Recurring words are counts from what they wrote, not interests. An empty comment list means nothing loaded matched, not that they never comment — the limits say so. Nothing here judges whether the person is worth meeting; that is the caller's call.",
+	},
+	{
 		id: "social.response",
 		description: "Read whether anything came back after this account wrote",
 		flags: [
