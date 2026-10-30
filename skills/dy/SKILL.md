@@ -84,7 +84,7 @@ dy feed previous
 dy feed sweep --count 10        # 一次走 10 条，返回 id/作者/标题/时长
 ```
 
-**`feed sweep` 是读一批的首选。** 一条命令、一次连接，`stopped` 说明为什么停下（`count_reached` / `steps_exhausted` / `feed_stuck`）。它不快多少（每条约 1.2 秒，瓶颈是页面过渡），但一次拿全数据，不用逐条 `video info`。
+**`feed sweep` 是读一批的首选。** 一条命令、一次连接，`stopped` 说明为什么停下（`count_reached` / `steps_exhausted` / `feed_stuck`）。它不快多少（瓶颈是页面过渡，一次几秒），但一次拿全数据，不用逐条 `video info`。
 
 ### 判断一条作品在讲什么
 
@@ -106,12 +106,15 @@ dy video info                   # 当前作品的身份、播放状态、时长
 dy video open <id-or-url>
 dy comment list --limit 20      # 每条带 stance 和 likes
 dy comment replies --comment-id <id>
+dy comment delete --comment-id <id> --confirm   # 删自己发的一条，不可撤销
 dy page scroll --target comments --pixels 600
 ```
 
 `comment list` 每条带 `stance`（`about_work` / `about_self` / `asking` / `spam` / `unknown`）和 `likes`。回之前看 stance，对着「在说自己」的评论夸「唱得好」是错位的。
 
 **它自己开的面板会自己关**，所以读完能直接 `feed next`。面板挡着翻页箭头时用 `dy comment close`。
+
+`comment delete` 只删自己的评论，别人的 id 会直接拒绝。**页面不会问你第二次**，点了就没，所以 `--confirm` 是唯一的闸。
 
 ### 学这个区的写法
 
@@ -250,11 +253,3 @@ dy guide                        # 这份文档的完整内容
 > ✗ 已完成评论区抓取的优化，本次改动涉及点赞数字段的补全，测试全部通过，效果良好。
 >
 > ✓ 评论区原来漏了点赞数。补上之后看真实数据：247 赞的是「下次一起唱」，4 个字；150 字堆术语那条只有 2 个赞。
-
-## 在任意项目里用 dy
-
-用 `dy` 不需要打开 ShuaDouyin 仓库。遇到失败、变慢或必须绕路才能完成的操作时，先用 `dy source` 拿到真正在运行这份 dy 的源码目录（含分支、HEAD 和是否有未提交改动），在那里修，而不是在当前项目里绕过去。
-
-**修工具的边界：** 读代码、改操作层、跑 `pnpm check` 和相关测试、`pnpm build`（重新构建即等于重新安装，启动器指向的就是这个工作树）——这些做了不用先问。**提交和推送不是**，它们改的是共享历史，按调用方当轮的授权来；没被要求就只改工作区，报告改了什么，别自己 push。
-
-停下来说明情况只有三种：不可逆的对外动作（私信、送礼、删数据）、只有用户能定的产品决策、你解决不了的凭据或环境问题。公开评论不在此列——见下一节。

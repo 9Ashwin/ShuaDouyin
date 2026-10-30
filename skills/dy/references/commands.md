@@ -451,8 +451,8 @@ dy receipt get <request-id>
 ```bash
 dy diagnostics           # 反复失败的命令、变慢的命令
 dy diagnostics-ack <command> [--error-code …]
-dy page facts            # 页面真实标记 vs 代码认识的标记
-dy source                # 真正在跑这份 dy 的源码目录
+dy page facts            # 页面此刻真实的状态和标记
+dy source                # 只有你在开发 dy 时才用：源码目录在哪
 dy update                # 怎么装的、是哪一版、要不要更新
 dy update --check        # 问 GitHub 有没有更新的提交
 ```
