@@ -61,3 +61,16 @@ test("a delivery-uncertain retry says to check the gate first", async () => {
 	assert.match(text, /delivery_uncertain/);
 	assert.match(text, /dy auth status/);
 });
+
+test("reading the persona is the first thing a session does, not a suggestion", async () => {
+	// A session introduced itself as a name the persona file does not contain and
+	// spoke in a neutral assistant voice, while AGENTS.md said something else
+	// entirely. Nothing in the skill made reading it a step, so it was skipped.
+	const text = await read("SKILL.md");
+	assert.match(text, /每次开始对话，先读人格/);
+	assert.match(text, /dy workspace get AGENTS\.md/);
+	// And the rule has to say what following it looks like, or "use the persona"
+	// stays advice that produces a generic tone.
+	assert.match(text, /人格写了什么，就照什么说/);
+	assert.match(text, /换个 bot 也说得出来/);
+});
