@@ -89,6 +89,9 @@ export interface Input {
 	// Which flags the caller typed, as opposed to defaults filled in by the
 	// catalog. Set by the argument parser, never by a caller.
 	_stated?: string[];
+	// Standing-permission inputs. Target reuses resource; these three are new.
+	actions?: string;
+	days?: number;
 }
 
 export function isWrite(operation: string): boolean {

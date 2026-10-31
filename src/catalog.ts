@@ -1703,6 +1703,49 @@ export const COMMANDS: CommandSpec[] = [
 			"Requires --request-id. Stops on identity or draft conflicts. --mention picks one exact name from the group @ picker; an ambiguous or missing name fails instead of mentioning the wrong member. --emoji sends one sticker from the composer's smiley, on its own: combining it with --text is refused because the platform sends a sticker the moment it is clicked. The latest end of a loaded conversation is not yet verifiable, so dispatched messages return delivery_uncertain; inspect the receipt and conversation and do not automatically resend.",
 	},
 	{
+		id: "auth.grant",
+		description: "Remember that one person may be written to, for a stated span",
+		flags: [
+			{
+				key: "target",
+				name: "--target <id>",
+				description: "user:<sec_uid> or conversation:<id>",
+				type: "string",
+				required: true,
+			},
+			{
+				key: "actions",
+				name: "--actions <list>",
+				description: "reply, comment, follow, like",
+				type: "string",
+				required: true,
+			},
+			{ key: "days", name: "--days <count>", description: "Days until it lapses; 0 for none", type: "number" },
+			{ key: "reason", name: "--reason <text>", description: "Why this person, for the next reader", type: "string" },
+		],
+		effect: "local",
+		guidance:
+			"This is not a way to switch off asking. It records one target and one set of actions, with an expiry and a reason, because the alternative people actually reach for — a note saying replies are fine — cannot be reviewed or revoked. A grant for one person does not extend to a group they are in, and one for a group does not extend to its members: those are different audiences. Nothing here decides whether a message is worth sending; it only records that the person was named.",
+	},
+	{
+		id: "auth.revoke",
+		description: "Stop a standing permission",
+		flags: [
+			{ key: "resource", name: "--grant-id <id>", description: "ID from auth grants", type: "string", required: true },
+		],
+		effect: "local",
+		guidance:
+			"Revoking does not delete the grant: what it covered already happened, and a later reader needs to know it existed and when it stopped.",
+	},
+	{
+		id: "auth.grants",
+		description: "List standing permissions and whether each is still in effect",
+		flags: [],
+		effect: "local",
+		guidance:
+			"Shows every grant with its target, actions, expiry and whether it is active. An expired or revoked grant is still listed, because the record of what was permitted is the point.",
+	},
+	{
 		id: "chat.inbox",
 		description: "Read what arrived unread, without deciding what to reply",
 		flags: [

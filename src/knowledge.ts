@@ -11,6 +11,7 @@ import { Growth } from "./growth.ts";
 import { packMemories } from "./memory/context.ts";
 import { Formation } from "./memory/formation.ts";
 import { MemoryStore, validateMemoryInput } from "./memory.ts";
+import { grantAccess, grants, revokeAccess } from "./operations/authorization.ts";
 import {
 	browsingContext,
 	endRound,
@@ -62,6 +63,11 @@ export function knowledgeOperation(operation: string): boolean {
 		// persona.migrate falling through to the browser dispatcher, where the only
 		// possible answer was "Unknown operation".
 		operation.startsWith("persona.") ||
+		// Standing permissions are workspace state: they are recorded in the event
+		// log and never touch the page. The whole group, for the same reason the
+		// persona group is whole — one leaf listed at a time is how one falls
+		// through to the browser dispatcher and answers "Unknown operation".
+		operation.startsWith("auth.") ||
 		operation.startsWith("learn.") ||
 		// social.response reads the page, so it must not be claimed as local: the
 		// prefix rule would have made it fall through here and report "unknown
@@ -419,6 +425,23 @@ export class Knowledge {
 				return new Growth(this.workspaces).acknowledge(input.event_id ?? "");
 			case "growth.event":
 				return this.workspaces.lock(() => new Growth(this.workspaces).event(input.event_id ?? ""));
+			case "auth.grant":
+				return this.workspaces.lock(() =>
+					grantAccess(new Store(this.workspaces.base), {
+						target: input.target,
+						actions: input.actions,
+						days: input.days,
+						reason: input.reason,
+					}),
+				);
+			case "auth.revoke":
+				return this.workspaces.lock(() =>
+					revokeAccess(new Store(this.workspaces.base), input.resource ?? input.target ?? ""),
+				);
+			case "auth.grants":
+				return this.workspaces.lock(async () => ({
+					grants: grants(await new Store(this.workspaces.base).events()),
+				}));
 			case "bot.show":
 				return this.workspaces.lock(async () => ({
 					id: BOT_ID,
