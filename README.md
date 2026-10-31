@@ -5,177 +5,185 @@
 
 <div align="center">
 
-# 刷抖音 · ShuaDouyin
+# ShuaDouyin · 刷抖音
 
-**让 agent 带着人格和记忆使用抖音。开源。**
+<img src="docs/assets/shuadouyin-hero.png" alt="ShuaDouyin 刷抖音：浏览与搜索、评论与互动、私信与分享、直播与弹幕、关系与跟进、人格与记忆" width="100%" />
 
-浏览、评论、私信、直播、记忆——一个本地 CLI，判断权留给调用它的 agent。
+**让你的 AI Agent，带着人格和记忆使用抖音。**
 
-<img src="https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white" alt="Node" />
-<img src="https://img.shields.io/badge/license-MIT-blue" alt="License" />
-<img src="https://img.shields.io/github/stars/9Ashwin/ShuaDouyin?style=social" alt="Stars" />
+一个本地命令行工具，连接 Agent、抖音页面和持续积累的上下文。
+
+<img src="https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white" alt="Node.js 22.19+" />
+<img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" />
+<img src="https://img.shields.io/github/stars/9Ashwin/ShuaDouyin?style=social" alt="GitHub Stars" />
+
+[快速开始](#快速开始) · [功能一览](#功能一览) · [Agent 接入](#给-agent-接入) · [开发与参与](#开发与参与)
 
 </div>
 
----
-
 ## 这是什么
 
-`dy` 是一个本地命令行工具。它不内建模型、不调度、不做内容判断——它提供**一轮浏览所需的状态、上下文和操作原语**，判断由调用它的 agent 做。
+ShuaDouyin 的命令叫 `dy`。把它交给能执行 shell 的 AI Agent，就能搜索内容、浏览作品与评论、按授权互动、处理私信与分享、进入直播间，并保存有来源的记忆和关系记录。
 
-它替你记住的：这个账号喜欢什么、跟谁聊过、哪句话有回应。它不替你决定的：该不该发、发什么、这个人值不值得认识。
+**你定义名字、语气和边界，Agent 负责理解与判断，`dy` 提供操作和证据。** 项目不内建模型，也不运行定时任务；使用你已有的 Agent 和本机 Chrome。人设与记忆保存在本地，可以跨会话继续使用。
 
-## 安装
+## 快速开始
+
+准备好 **Node.js 22.19+、Chrome，以及一个能执行 shell 的 Agent**。
+
+### 1. 安装工具与 skill
 
 ```bash
 npm install -g shuadouyin
+dy --version
+dy skill install
 ```
 
-`dy` 随即可用。**不下载浏览器**——用你本机已有的 Chrome。
+npm 包叫 `shuadouyin`，可执行命令叫 `dy`。发布包已包含构建产物；使用本机 Chrome，不额外下载浏览器。`dy skill install` 会为已检测到的 Agent 安装技能，已有的非托管副本会保留。
 
-包叫 `shuadouyin`，命令叫 `dy`。发布包里带的是构建好的 `dist/`，装上就能跑，不需要本地再编译一次。
+### 2. 建立工作区并登录
+
+```bash
+dy init
+dy auth login
+```
+
+在打开的专用 Chrome 窗口里扫码登录。工作区默认位于 `~/.dy`，浏览器登录保存在 `~/.dy/chrome`，后续继续使用。
+
+### 3. 在你的 Agent 里开始聊
+
+> 用 dy 带我完成设置，先问我名字、语气和边界。然后刷 5 条，挑 1 条读画面和评论，告诉我看到了什么。这轮只看，不互动。
+
+也可以从具体任务开始：
+
+- **带着问题找内容：**“搜一下 AI 编程，挑两条展开读，区分标题、画面和评论提供的信息。”
+- **继续已有对话：**“看看我指定会话的新消息，结合之前的上下文拟一条回复。”
+- **跟进关系：**“整理我已记录的人，看看今天有哪些到期的跟进事项。”
+- **回顾一天：**“根据今天的本地记录和收据写个摘要，结果不明的操作单独说明。”
+
+想自己操作终端界面，可以运行 `dy tui`；它需要真实终端，和 CLI 共用同一套操作与状态。
+
+## 功能一览
+
+![ShuaDouyin 六格漫画：设定人格、搜索与浏览、读作品与评论、互动与分享、直播与弹幕、记忆与关系](docs/assets/shuadouyin-workflow.png)
+
+图中角色代表可配置的 Agent，名字、语气和边界由你定义。四个采样点和五条评论来自一次实际浏览，画面为重绘；其他场景是功能示意，不代表本次执行了发送或送礼。
+
+| 能力 | 常用入口 |
+| --- | --- |
+| 搜索作品、找人、批量浏览推荐流 | `dy search` · `dy user search` · `dy feed sweep` |
+| 读取作品、采样画面、查看评论与回复 | `dy video digest` · `dy comment list` · `dy comment replies` |
+| 点赞、收藏、关注、发布文字或图片评论 | `dy video like` · `dy video favorite` · `dy user follow` · `dy comment post` · `dy comment image` |
+| 读取私信、发送文字和图片、引用回复 | `dy chat read` · `dy chat send` · `dy chat image` · `dy chat reply` |
+| 分享作品链接或原生卡片 | `dy chat share` · `dy chat forward` |
+| 读取直播信息与弹幕、发言、按名称和价格送礼 | `dy live info` · `dy live chat` · `dy live say` · `dy live gift` |
+| 读取人格、召回记忆、保存带来源的事实 | `dy persona show` · `dy context show` · `dy memory add` |
+| 从实际表达中更新声音、积累经验、自查文风 | `dy persona evolve` · `dy learn keep` · `dy voice check` |
+| 管理浏览轮次、目标、关系与跟进事项 | `dy browse start` · `dy social goal` · `dy social due` |
+| 查询操作收据、准备和保存日报 | `dy receipt get` · `dy report prepare` · `dy report save` |
+
+表中是命令入口，必填参数见 `dy <命令> --help`；完整命令与字段见 `dy schema`。
+
+## 人格和记忆如何延续
+
+默认工作区 `~/.dy` 将人格、人物资料、记忆和账号登录分开保存：
+
+- **`AGENTS.md`** 定义这个 Agent 的身份、语气和边界，设定可以修改。
+- **`PROFILES.md` 与 `memory/`** 保存人物资料和带来源的记忆。用户明确表达的事实、页面观察和推测分开记录；Markdown 是记忆正文的来源。
+- **`growth review`、`learn keep` 与 `persona evolve`** 为回顾、经验和表达变化提供依据。是否值得保存由调用方判断，浏览不等于自动形成长期偏好。
+
+更新或重新安装 CLI 会继续使用原工作区。需要重新开始时，使用下方的重置命令。
+
+## 给 Agent 接入
+
+[dy skill](skills/dy/SKILL.md) 负责教 Agent 如何使用工具，主题流程放在 [references](skills/dy/references/) 中。除了 `dy skill install`，也可以使用技能安装器：
+
+```bash
+npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
+```
+
+每次任务先读人格和相关上下文，再读页面：
+
+```bash
+dy persona show
+dy context show --query "这次要解决的问题"
+dy feed sweep --count 5
+```
+
+从结果中选出作品 ID 后，先打开对应详情页，再采样：
+
+```bash
+dy video open <video-id>
+dy video digest --video-id <video-id> --limit 5
+```
+
+`dy guide` 提供与当前安装版本一致的使用说明；`dy schema` 提供命令、参数和副作用类型。一次只运行一个工作区操作，避免账号锁冲突。
+
+成功输出 `{ok:true,data}` 到 stdout；失败输出 `{ok:false,error}` 到 stderr，并返回非零退出码。写入使用唯一的 `--request-id`；`--dry-run` 只验证参数和计划，不连接 Chrome、不填表、不发送。完整契约见 [docs/contracts.md](docs/contracts.md)。
+
+## 操作与证据边界
+
+- **写之前先留收据。** 已确认的 request ID 重放时返回原收据；遇到 `delivery_uncertain` 先核对，不自动重发。原生卡片分享目前无法验证送达，发出后会保留不确定状态。
+- **用稳定 ID 定位。** 作品、用户和会话以 CLI 返回的稳定 ID 为准；昵称只用于展示。
+- **采样不等于完整观看。** 列表只包含已加载内容，通常标记 `complete: false`；直播画面不作为可读内容返回。判断由 Agent 根据实际证据作出。
+- **对外动作需要授权。** 评论、私信、关注和直播发言作用于真实账号；礼物会花真钱，必须明确同意并核对名称和价格。删除或撤回受平台条件限制，不能保证收回已被看到的内容。
+- **登录和数据留在本机。** 自动化可能触发验证、限流或账号处罚；验证需要真人完成，项目不提供绕过手段。`~/.dy` 含登录态、消息和记忆，不应提交或共享。详见 [SECURITY.md](SECURITY.md)。
+
+## 安装方式与工作区管理
 
 <details>
-<summary><strong>其他</strong></summary>
+<summary><strong>其他安装方式、卸载与重置</strong></summary>
 
-从源码装（会构建一次，几秒）：
+从 GitHub 源码安装，会执行构建：
 
 ```bash
 npm install -g github:9Ashwin/ShuaDouyin
 ```
 
-装到独立目录，不需要全局 npm：
+macOS / Linux 也可以使用独立目录安装器：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/9Ashwin/ShuaDouyin/main/scripts/install.sh | sh
 ```
 
-卸载：
+检查 skill 副本与当前版本是否一致：
+
+```bash
+dy skill status
+```
+
+卸载 npm 全局安装的命令，保留 `~/.dy`：
 
 ```bash
 npm uninstall -g shuadouyin
 ```
 
-卸载保留 `~/.dy` 里的 bot、记忆和账号登录状态。
+重置人格、记忆及活动状态，会先备份；Chrome 登录保留：
+
+```bash
+dy bot reset           # 只预览范围
+dy bot reset --write   # 备份后重置，以返回的备份路径为准
+dy init                # 重新建立工作区
+```
 
 </details>
 
-装 skill 给 agent 用（可选）：
-
-```bash
-npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
-```
-
-或者用 CLI 自己装到 agent 目录：
-
-```bash
-dy skill install
-dy skill status   # 已装的副本和仓库是否一致
-```
-
-## 开始使用
-
-```bash
-dy init                      # 建工作区，开始引导
-dy onboarding show           # 回答四个问题：名字、性格、关于你的事实、界限
-dy auth login                # 打开 Chrome 扫码登录抖音
-dy feed next                 # 刷下一条
-dy video info                # 读当前作品
-```
-
-第一次登录会打开一个专用的 Chrome 窗口（profile 在 `~/.dy/chrome`），扫码后这个登录会一直保留。
-
-想手动刷、手动点赞时用 `dy tui`——一个覆盖同样操作的终端界面。它和 CLI 走同一套实现，所以两边看到的状态一致。需要在真实终端里运行（不接受管道输入），也不能和 `--dry-run` 一起用。
-
-## 它能做什么
-
-| 做什么 | 命令 |
-| --- | --- |
-| 刷推荐流 | `dy feed open` / `dy feed next` / `dy video info` |
-| 读作品与评论 | `dy video info` / `dy comment list` / `dy comment replies` |
-| 互动 | `dy video like` / `dy video favorite` / `dy comment post` / `dy comment reply` |
-| 私信 | `dy chat list` / `dy chat read` / `dy chat send` / `dy chat image` |
-| 人 | `dy user get` / `dy user search` / `dy user followers` / `dy user follow` |
-| 直播 | `dy live info` / `dy live chat` / `dy live say` / `dy live gift` |
-| 搜索 | `dy search` / `dy user search` |
-| 记忆与人格 | `dy memory add` / `dy memory search` / `dy context show` |
-| 人格自己长 | `dy persona evolve` / `dy persona history` / `dy persona rollback` |
-| 沉淀经验 | `dy learn keep` / `dy learn findings` |
-| 文风自查 | `dy voice check --text "…"` |
-| 浏览轮次 | `dy browse start` / `dy browse watch` / `dy browse end` |
-| 社交关系 | `dy social goal` / `dy social list` / `dy social due` / `dy social log` |
-| 让 agent 会用 | `dy guide` |
-
-完整命令见 `dy schema`，或 `dy <命令> --help`。
-
-## 给 agent 用
-
-`dy` 是为 agent 设计的。把它交给任何能跑 shell 的 agent：
-
-```bash
-dy guide      # 返回完整的使用说明（约 3 万字），agent 读这个
-```
-
-或者把 skill 装进你的 agent 技能目录，这样它知道什么时候该用 `dy`、怎么用：
-
-```bash
-npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
-```
-
-`skills/dy` 里按主题分成八个参考文件：浏览与成长、记忆与人格、社交、直播、日报、自我改进、命令全表，以及**平台事实**——最后一个是踩过的坑，读它能省掉一次重来。
-
-`SKILL.md` 本身只有两百来行，是每次对话都会加载的那部分；参考文件按需读。
-
-## 设计原则
-
-- **不做判断。** `dy` 不内建模型。它返回事实和候选，判断留给调用方。它对着一个真实账号操作，所以代码的职责是让每个动作可审计、可回滚，而不是替你决定这个动作该不该做。
-- **写之前先落收据。** 每条写入在可能发出之前就已落盘，重放同一个 request ID 返回原收据。`delivery_uncertain` 永远不自动重试——那条可能已经发出去了，再发就是两条。
-- **身份用稳定 ID。** 昵称会重名会改，`sec_uid` 不会。
-- **读到什么说什么。** 直播画面是 canvas，读不到就不报内容；评论是抽样，标 `complete: false`。
-- **记忆跟账号走。** 换一个安装就是新的 bot，不继承别人的判断。
-
-## 重置
-
-```bash
-dy bot reset           # 看会清掉什么（不改动）
-dy bot reset --write   # 备份到 ~/.dy-backup-<时间> 后清空
-dy init                # 建新的 bot
-```
-
-Chrome 登录会保留，不用重新扫码。
-
-## 开发
+## 开发与参与
 
 需要 Node.js 22.19+、pnpm 和本机 Chrome。
 
 ```bash
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm build
+pnpm check           # Biome + TypeScript
 pnpm test            # 单元测试
-pnpm test:browser    # 隔离 Chrome 的浏览器测试
-pnpm check           # Biome + tsc
+pnpm test:browser    # 临时 Chrome profile + fixture 页面
 ```
 
-输出契约、收据状态和存储语义见 [docs/contracts.md](docs/contracts.md)。源码结构、模块归属和检查流程见 [AGENTS.md](AGENTS.md)。
+浏览器测试不使用账号凭据，通过测试不等于通过真实抖音页面验证。项目仍处于早期阶段，页面变化可能影响操作；错误码、参数和返回字段按公开契约维护。
 
-## 风险与边界
-
-这是一个操作真实抖音账号的工具。用它意味着接受下面几件事：
-
-- **账号风险由你承担。** 自动化使用抖音可能触发平台的人机验证、限流或处罚。项目不提供任何绕过手段，也不会帮你规避风控。验证弹出来时，需要真人在有头的 Chrome 里完成。
-- **发出去的东西撤不回来。** 评论、私信、弹幕、礼物都是对外且不可逆的。送礼花的是真钱。发之前先确认对象和内容，`--dry-run` 可以先看计划。
-- **本地状态含敏感信息。** `~/.dy` 里有登录态、读过的消息和长期记忆。不要提交、不要截图、不要放进共享目录。详见 [SECURITY.md](SECURITY.md)。
-- **读到的不是全部。** 列表是抽样并标 `complete: false`，直播画面是 canvas 读不到字。基于抽样下结论是你自己的判断，不是工具的结论。
-- **它不做判断。** 该不该发、发给谁、这个人值不值得认识，命令不会替你决定，也不会因为调用方是 agent 就降低门槛。
-
-## 状态
-
-早期阶段。命令、错误码和返回字段是公开契约，会尽量保持稳定；数据库结构随版本迁移。CI 在 Ubuntu、macOS 和 Windows 上跑单元测试与隔离 Chrome 测试。
-
-## 参与
-
-见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题走私密报告渠道，见 [SECURITY.md](SECURITY.md)。
+开发规则见 [AGENTS.md](AGENTS.md)，架构见 [docs/architecture.md](docs/architecture.md)，贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)，版本变化见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 许可
 
-MIT
+[MIT](LICENSE)
