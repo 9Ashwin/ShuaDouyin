@@ -67,7 +67,11 @@ export function knowledgeOperation(operation: string): boolean {
 		// log and never touch the page. The whole group, for the same reason the
 		// persona group is whole — one leaf listed at a time is how one falls
 		// through to the browser dispatcher and answers "Unknown operation".
-		operation.startsWith("auth.") ||
+		// The prefix rule is wrong for this group: auth.status and auth.login read
+		// the page, so claiming them as local answered "Unknown workspace
+		// operation" on a command that had worked for months. Only the standing
+		// permission commands are workspace state.
+		["auth.grant", "auth.revoke", "auth.grants"].includes(operation) ||
 		operation.startsWith("learn.") ||
 		// social.response reads the page, so it must not be claimed as local: the
 		// prefix rule would have made it fall through here and report "unknown

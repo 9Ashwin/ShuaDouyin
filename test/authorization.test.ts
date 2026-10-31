@@ -194,3 +194,15 @@ test("yesterday's uses do not count against today", async (t) => {
 	// Same events, evaluated tomorrow.
 	assert.ok(covers(await store.events(), "user:MS4wLjABAAAAperson", "reply", Date.now() + 86_400_000));
 });
+
+test("auth.status stays a page command after the permission group was added", async () => {
+	// The prefix rule `auth.` was added for the grant commands and swallowed two
+	// page commands with it: auth.status answered "Unknown workspace operation"
+	// on a command that had worked for months. Nothing in the suite noticed,
+	// because the test for it needs a live page.
+	const { knowledgeOperation } = await import("../src/knowledge.ts");
+	for (const operation of ["auth.grant", "auth.revoke", "auth.grants"])
+		assert.equal(knowledgeOperation(operation), true, `${operation} is workspace state`);
+	for (const operation of ["auth.status", "auth.login"])
+		assert.equal(knowledgeOperation(operation), false, `${operation} reads the page`);
+});

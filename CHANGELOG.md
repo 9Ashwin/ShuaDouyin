@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 — 2026-10-31
+
+### 修复
+
+- `dy auth status` 和 `dy auth login` 报「Unknown workspace operation」。0.5.0 加 `auth grant` 那组命令时，前缀规则把这两个页面命令也一起算成了本地命令。用了几个月的命令直接不能用，测试没抓到是因为它需要真实页面。
+
 ## 0.5.0 — 2026-10-31
 
 ### 新增
