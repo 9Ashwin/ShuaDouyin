@@ -1729,6 +1729,7 @@ export const COMMANDS: CommandSpec[] = [
 				required: true,
 			},
 			{ key: "days", name: "--days <count>", description: "Days until it lapses; 0 for none", type: "number" },
+			{ key: "per_day", name: "--per-day <count>", description: "Most sends to this target per day", type: "number" },
 			{ key: "reason", name: "--reason <text>", description: "Why this person, for the next reader", type: "string" },
 		],
 		effect: "local",

@@ -92,6 +92,7 @@ export interface Input {
 	// Standing-permission inputs. Target reuses resource; these three are new.
 	actions?: string;
 	days?: number;
+	per_day?: number;
 }
 
 export function isWrite(operation: string): boolean {

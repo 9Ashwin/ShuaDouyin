@@ -10,6 +10,7 @@ import {
 	grants,
 	parseActions,
 	parseTarget,
+	recordUse,
 	revokeAccess,
 } from "../src/operations/authorization.ts";
 import { Store } from "../src/store.ts";
@@ -147,4 +148,49 @@ test("the command path reaches the workspace, not the browser", async (t) => {
 	await app.execute("auth.revoke", { resource: granted.id });
 	const after = (await app.execute("auth.grants", {})) as { grants: { active: boolean }[] };
 	assert.equal(after.grants[0]?.active, false);
+});
+
+test("a per-day limit is reached by uses, not by time", async (t) => {
+	// Without the use events the limit could never be reached: covers() counts
+	// them, and counting nothing is an unlimited grant that claims a limit.
+	const store = await setup(t);
+	const grant = (await grantAccess(store, {
+		target: "user:MS4wLjABAAAAperson",
+		actions: "reply",
+		per_day: 2,
+		reason: "他最近问得多",
+	})) as { id: string };
+	assert.ok(covers(await store.events(), "user:MS4wLjABAAAAperson", "reply"));
+	await recordUse(store, grant.id, "user:MS4wLjABAAAAperson", "reply");
+	await recordUse(store, grant.id, "user:MS4wLjABAAAAperson", "reply");
+	assert.equal(covers(await store.events(), "user:MS4wLjABAAAAperson", "reply"), null, "two of two used today");
+});
+
+test("the limit is per target, so one person running out does not stop another", async (t) => {
+	const store = await setup(t);
+	const a = (await grantAccess(store, {
+		target: "user:MS4wLjABAAAAperson_a",
+		actions: "reply",
+		per_day: 1,
+		reason: "x",
+	})) as { id: string };
+	// B's grant exists; the test only needs A to be used up.
+	await grantAccess(store, { target: "user:MS4wLjABAAAAperson_b", actions: "reply", per_day: 1, reason: "y" });
+	await recordUse(store, a.id, "user:MS4wLjABAAAAperson_a", "reply");
+	const events = await store.events();
+	assert.equal(covers(events, "user:MS4wLjABAAAAperson_a", "reply"), null);
+	assert.ok(covers(events, "user:MS4wLjABAAAAperson_b", "reply"));
+});
+
+test("yesterday's uses do not count against today", async (t) => {
+	const store = await setup(t);
+	const grant = (await grantAccess(store, {
+		target: "user:MS4wLjABAAAAperson",
+		actions: "reply",
+		per_day: 1,
+		reason: "x",
+	})) as { id: string };
+	await recordUse(store, grant.id, "user:MS4wLjABAAAAperson", "reply");
+	// Same events, evaluated tomorrow.
+	assert.ok(covers(await store.events(), "user:MS4wLjABAAAAperson", "reply", Date.now() + 86_400_000));
 });

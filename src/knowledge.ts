@@ -431,6 +431,7 @@ export class Knowledge {
 						target: input.target,
 						actions: input.actions,
 						days: input.days,
+						per_day: input.per_day,
 						reason: input.reason,
 					}),
 				);

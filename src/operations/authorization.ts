@@ -23,6 +23,8 @@ export interface Grant {
 	actions: GrantedAction[];
 	/** Days from granted_at. Zero means it does not expire on its own. */
 	days: number;
+	/** How many separate days it may be used on, or null for no limit. */
+	per_day: number | null;
 	granted_at: string;
 	expires_at: string | null;
 	reason: string;
@@ -55,11 +57,13 @@ export function grants(events: Event[]): (Grant & { id: string; active: boolean 
 				: [];
 			if (!id || !TARGET.test(target) || !actions.length) continue;
 			const days = typeof data.days === "number" ? data.days : 0;
+			const per_day = typeof data.per_day === "number" && data.per_day > 0 ? data.per_day : null;
 			byID.set(id, {
 				id,
 				target,
 				actions,
 				days,
+				per_day,
 				granted_at: event.at,
 				expires_at:
 					typeof data.expires_at === "string"
@@ -97,9 +101,26 @@ export function covers(events: Event[], target: string, action: GrantedAction, n
 		if (grant.target !== target) continue;
 		if (!grant.actions.includes(action)) continue;
 		if (grant.expires_at && Date.parse(grant.expires_at) < now) continue;
+		// The limit is about this person, not about the whole run: three a day
+		// means three to them, and a grant that ran out for one target says
+		// nothing about another.
+		if (grant.per_day !== null && usesToday(events, grant.id, target, now) >= grant.per_day) continue;
 		return grant;
 	}
 	return null;
+}
+
+/** How many separate times this grant has been used for this target today. */
+function usesToday(events: Event[], grantID: string, target: string, now: number): number {
+	const day = new Date(now).toISOString().slice(0, 10);
+	let count = 0;
+	for (const event of events) {
+		if (event.operation !== "auth.used") continue;
+		const data = record(event);
+		if (data.grant_id !== grantID || data.target !== target) continue;
+		if (event.at.slice(0, 10) === day) count++;
+	}
+	return count;
 }
 
 export function parseTarget(raw: string): string {
@@ -127,7 +148,7 @@ export function parseActions(raw: string | undefined): GrantedAction[] {
 
 export async function grantAccess(
 	store: Store,
-	input: { target?: string; actions?: string; days?: number; reason?: string },
+	input: { target?: string; actions?: string; days?: number; per_day?: number; reason?: string },
 ): Promise<unknown> {
 	const target = parseTarget(input.target ?? "");
 	const actions = parseActions(input.actions);
@@ -136,6 +157,9 @@ export async function grantAccess(
 		throw new CliError("invalid_argument", "--days must be an integer from 0 to 365", {
 			hint: "0 means it does not expire; anything else is taken as a decision with a review date.",
 		});
+	const perDay = input.per_day;
+	if (perDay !== undefined && (!Number.isInteger(perDay) || perDay < 1 || perDay > 100))
+		throw new CliError("invalid_argument", "--per-day must be an integer from 1 to 100");
 	const reason = (input.reason ?? "").trim();
 	// A standing permission with no stated reason cannot be reviewed later: the
 	// next reader sees an approval and has nothing to weigh it against.
@@ -149,8 +173,26 @@ export async function grantAccess(
 	const id = crypto.randomUUID();
 	const at = new Date().toISOString();
 	const expires_at = days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null;
-	await store.append("auth.granted", { grant_id: id, target, actions, days, expires_at, reason });
-	return { id, target, actions, days, granted_at: at, expires_at, reason, active: true };
+	await store.append("auth.granted", {
+		grant_id: id,
+		target,
+		actions,
+		days,
+		...(perDay === undefined ? {} : { per_day: perDay }),
+		expires_at,
+		reason,
+	});
+	return {
+		id,
+		target,
+		actions,
+		days,
+		per_day: perDay ?? null,
+		granted_at: at,
+		expires_at,
+		reason,
+		active: true,
+	};
 }
 
 export async function revokeAccess(store: Store, id: string): Promise<unknown> {
@@ -159,4 +201,16 @@ export async function revokeAccess(store: Store, id: string): Promise<unknown> {
 	if (!found.active) return { ...found, already_inactive: true };
 	await store.append("auth.revoked", { grant_id: id });
 	return { ...found, active: false };
+}
+
+/**
+ * Record that a grant was used for one send.
+ *
+ * Without this the per-day limit can never be reached: `covers` counts these
+ * events, and counting nothing means an unlimited grant that claims a limit.
+ * A caller records it after the write path decides it is dispatching, not
+ * before — a refused send did not use the allowance.
+ */
+export async function recordUse(store: Store, grantID: string, target: string, action: GrantedAction): Promise<void> {
+	await store.append("auth.used", { grant_id: grantID, target, action });
 }
