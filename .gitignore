@@ -30,3 +30,4 @@ token.env
 
 # Python bytecode from running the bundled skill-creator scripts.
 __pycache__/
+.probe/
