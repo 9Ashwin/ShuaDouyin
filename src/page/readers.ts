@@ -926,23 +926,25 @@ export function aiEntryPoint() {
 // box and the action row. Reading without that marker returns a truncated answer
 // that looks whole.
 export function aiSummary() {
-	const text = document.body.innerText;
-	const marker = "以上内容由AI生成";
-	const end = text.indexOf(marker);
-	if (end < 0) return { complete: false, summary: "", why: "The AI panel is not showing a finished answer" };
-	// Everything before the disclaimer includes the nav, the player and the
-	// comment rail. The summary is the last paragraph block before it, and the
-	// tab row (`TA的作品 / 评论 / 相关推荐`) is where that block starts.
-	const head = text.slice(0, end);
-	const tabs = /(?:TA的作品|相关推荐)\s*\n?\s*评论?\s*\n?\s*相关推荐\s*\n*/;
-	const after = tabs.test(head)
-		? head.slice(head.search(tabs) + (head.match(tabs)?.[0].length ?? 0)).trim()
-		: head.trim();
-	return {
-		complete: true,
-		summary: clean(after),
-		why: "",
-	};
+	// The answer is a list of `round-card-item` blocks, and the disclaimer is the
+	// last of them. `.round-answer` is not the answer: it is a container whose five
+	// children hold the page behind the panel too, so reading its text returned the
+	// nav bar, the player controls and another work's caption — 48k characters of
+	// page, finished, and entirely wrong.
+	const items = findRendered<HTMLElement>(document, ".round-card-item");
+	const notice = items.findIndex((item) => item.textContent?.includes("以上内容由AI生成"));
+	// No disclaimer means the panel is still writing. Returning what is there
+	// would be returning a partial answer that reads like a whole one.
+	if (notice < 0) return { complete: false, summary: "", why: "The AI panel is still writing" };
+	// Everything before the disclaimer, which is how the page orders them.
+	const prose = clean(
+		items
+			.slice(0, notice)
+			.map((item) => clean(item.textContent))
+			.filter(Boolean)
+			.join("\n"),
+	);
+	return { complete: prose.length > 0, summary: prose, why: prose ? "" : "The AI panel answered with no text" };
 }
 
 function readShare(container: HTMLElement) {

@@ -31,8 +31,33 @@ export const AI_SUMMARY_LIMITS = [
 ];
 
 export async function readAiSummary(session: Session, input: Input, signal: AbortSignal): Promise<AiSummary> {
-	const open = await session.call<{ video?: { id?: string } }>("video.info", input);
+	const open = await session.call<{ video?: { id?: string }; url?: string | null }>("video.info", input);
 	const workID = open.video?.id ?? null;
+	if (!workID) throw new CliError("unsupported_media", "There is no work on screen to summarise");
+	// The AI entry lives on the feed's overlay, not on the /video/<id> detail page.
+	// A caller that opened a work first — the normal way to read one — would find
+	// nothing to click, so the work is reopened in the form that has the panel.
+	// modal_id addresses one work directly; without it the feed would have to be
+	// walked until this work came round again.
+	// The form that has the panel is any feed or modal view, not only
+	// `?recommend=1`: the modal URL is `/jingxuan?modal_id=...`, so keying on
+	// recommend alone reopened the page on every call and wiped the panel that had
+	// just finished writing.
+	const onDetail = !!open.url && /\/video\/|\/note\//.test(open.url);
+	if (onDetail) {
+		await session.tab.goto(`https://www.douyin.com/?modal_id=${workID}`, { waitUntil: "domcontentloaded" });
+		await delay(1500, undefined, { signal });
+	}
+	// The modal form keeps its `modal_id`, but the work element is addressed
+	// differently there and `video.info` cannot identify it. What the panel will
+	// describe is whatever is on screen, so the page is asked directly rather than
+	// trusted to be the same work.
+	const shown = await session.call<{ video?: { id?: string } | null }>("video.info", {});
+	if (shown.video?.id && shown.video.id !== workID)
+		throw new CliError("identity_mismatch", "The page is showing a different work than the one asked for", {
+			hint: "Open it again with dy video open, then retry.",
+			details: { asked: workID, showing: shown.video.id },
+		});
 	const point = await session.call<{ x: number; y: number }>("ai.entry.point", {});
 	await session.tab.mouse.click(point.x, point.y);
 

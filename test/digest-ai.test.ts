@@ -48,6 +48,7 @@ function session(): Session {
 			return null;
 		},
 		tab: {
+			goto: async () => undefined,
 			mouse: { click: async () => undefined },
 			screenshot: async () => Buffer.from("png"),
 			evaluate: async () => undefined,
