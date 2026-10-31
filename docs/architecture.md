@@ -118,6 +118,22 @@ report real-platform validation separately. The fixture is written from the same
 understanding that produced the code, so it can only catch a disagreement
 between the two; the live page is what settles a claim.
 
+**The failure that matters is the fixture being wrong in the same way as the
+code.** A test then passes while the page fails, and nothing in the suite can
+tell. It has happened twice, both times on structure rather than behaviour:
+
+- The share card's `parsedContent` was written as a plain property because that
+  is what the code read. On the page it is a getter, and `own()` refuses those,
+  so the id was always `undefined`. The fixture now uses the getter shape, and
+  removing `getterValue` from the lookup makes the test fail.
+- The message list had no scroll container, so every row was in the viewport and
+  a `find()`-based reader looked correct. The fixture scrolls now and carries a
+  row below the fold.
+
+When a reader is fixed against the live page, change the fixture to the shape
+the page actually has before writing the assertion — otherwise the test records
+the old understanding and protects it.
+
 `pnpm crap` ranks functions by complexity weighted by real coverage. It runs the
 suite under V8 coverage, so it takes as long as the suite does.
 

@@ -127,7 +127,18 @@ Drawn from what has actually gone wrong here, not from a generic list.
   `page.evaluate` that inspects elements belongs in the adapter as an operation.
 - **Do not read a React record by own properties alone.** Conversation fields
   live on the prototype and get renamed between builds. `own()`, `inherited()`
-  and `getterValue()` exist for this.
+  and `getterValue()` exist for this — and they are not interchangeable. `own()`
+  refuses accessors on purpose, so a field that is a getter comes back
+  `undefined` with no error; `getterValue()` is the opt-in for exactly that case.
+  Reading the wrong one is silent, which is how a shared work's id was missing
+  while the fixture — written with a plain property — stayed green.
+- **Check the reader's ordering and visibility rules against a real response
+  before trusting them.** Three bugs in one week came from assuming both:
+  `readChat` used `find()` (viewport-only) and dropped every message from the
+  other side; `chat inbox` treated a newest-first array as oldest-first, so
+  "awaiting a reply" was inverted; the comment panel was judged closed because
+  its rows were below the fold. `find()` vs `findRendered()`, and `[0]` vs
+  `at(-1)`, are not stylistic choices — print one real response and look.
 - **Do not match a CSS class.** Per-build hashes like `s7K4YLGp` change; class
   *substrings* like `webcast-chatroom___item` also match the container. Prefer
   `data-e2e` markers, then structure, then size — never a hash.
