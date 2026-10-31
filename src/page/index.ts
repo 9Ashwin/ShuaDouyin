@@ -74,6 +74,7 @@ import {
 import { cleanupNoteSlide, noteHoverPoint, noteSlideReceipt, prepareNoteSlide } from "./note.ts";
 import {
 	aiEntryPoint,
+	aiPanelOpen,
 	aiSummary,
 	authenticatedUser,
 	chatRoot,
@@ -674,6 +675,8 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 		}
 		case "ai.entry.point":
 			return aiEntryPoint();
+		case "ai.panel.open":
+			return aiPanelOpen();
 		case "ai.summary":
 			return aiSummary();
 		case "steer.opener":

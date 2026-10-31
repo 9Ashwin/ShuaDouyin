@@ -7,6 +7,7 @@ import {
 	inherited,
 	one,
 	own,
+	point,
 	reactProps,
 	routeKind,
 	scalarID,
@@ -903,20 +904,68 @@ function readEmoji(container: HTMLElement) {
 // Where to click to open the work's AI summary.
 //
 // The entry is a 44x44 button beside the player rail and carries no text and no
-// data-e2e, only the class `ai-douyin-entry`. Its position is measured rather
-// than a selector handed to the caller because the rail re-renders on every feed
-// move, and a coordinate from a previous work would press the next one's button.
+// data-e2e, only the class `ai-douyin-entry`.
+//
+// It is marked and handed to Playwright as a locator rather than reported as a
+// coordinate. A coordinate is measured in one frame and used in another, and this
+// rail animates: entering the feed slides it in, and for a few hundred milliseconds
+// the icon is somewhere between two positions. A press at a half-way coordinate
+// lands on the work instead — no panel opens, and the failure reads as a slow model
+// thirty seconds later. A locator re-checks the position at press time.
+const AI_COVERED_HINT = "A panel left open from an earlier call covers it. Close the overlay and retry.";
+
 export function aiEntryPoint() {
-	// The feed keeps the neighbouring slides laid out, so the next work has an
-	// entry too. Only the one inside the viewport belongs to the work on screen;
-	// pressing the other one opens the next work's summary instead.
-	const entries = findRendered<HTMLElement>(document, '[class*="ai-douyin-entry"]').filter((element) => {
+	// There is more than one entry on screen in both forms this runs in.
+	//
+	// On the feed the neighbouring slides are laid out too, and only the one wholly
+	// inside the viewport belongs to the work being looked at. In the `?modal_id=`
+	// overlay the feed keeps running behind the modal, so its entry is still laid
+	// out, still inside the viewport, and lying underneath the overlay — clicking it
+	// changes the background feed and opens nothing.
+	//
+	// Neither size nor position separates those two. What does is which one is on
+	// top: the entry that is actually painted above everything else at its own centre
+	// is the one a press reaches. That check is also the reason the press can be
+	// trusted at all — an entry covered by the panel it just opened is not a target.
+	const reachable = findRendered<HTMLElement>(document, '[class*="ai-douyin-entry"]').filter((element) => {
 		const box = element.getBoundingClientRect();
-		return box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < innerHeight;
+		if (box.width <= 0 || box.height <= 0) return false;
+		if (box.top < 0 || box.bottom > innerHeight || box.left < 0 || box.right > innerWidth) return false;
+		const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+		if (!hit || !(hit === element || element.contains(hit))) return false;
+		// The entry can be its own hit target and still be the wrong one: in the
+		// overlay the feed behind keeps handling events that are forwarded to it, so
+		// a press meant for the front work can reach the one behind. What separates
+		// them is the player each entry belongs to — the work being looked at is the
+		// one whose player is drawn on top at its own centre.
+		let player: HTMLElement | null = element.parentElement;
+		for (let depth = 0; player && depth < 12; depth++, player = player.parentElement)
+			if (/basePlayerContainer/.test(player.className?.toString() ?? "")) break;
+		if (!player) return false;
+		const box2 = player.getBoundingClientRect();
+		const above = document.elementFromPoint(box2.left + box2.width / 2, box2.top + box2.height / 2);
+		return !!above && (above === player || player.contains(above));
 	});
-	const entry = one(entries, "AI summary entry on screen");
-	const box = entry.getBoundingClientRect();
-	return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };
+	// No entry at all — an advertisement, a live slide — is a real state, not a
+	// broken page. Reporting it as a selector change sent the caller looking for a
+	// broken icon on a work that never had one.
+	//
+	// An entry that exists but is covered is a different thing and must not be
+	// reported as the first: that is what a panel left open by an earlier call looks
+	// like, and calling it "no summary here" would hide a summary that is already on
+	// screen.
+	if (!reachable.length) {
+		const present = findRendered<HTMLElement>(document, '[class*="ai-douyin-entry"]').length;
+		if (present) fail("selector_changed", "The AI entry is covered by something else", AI_COVERED_HINT);
+		fail("unsupported_media", "This work offers no AI summary");
+	}
+	const entry = one(reachable, "AI summary entry on screen");
+	// A fresh token per call, not a fixed one. `point()` marks the element with it,
+	// and the marker is only cleared by `cleanup`. A fixed token meant the second
+	// call marked a second element with the same attribute, and the locator built
+	// from it then matched two — which Playwright refuses, so every retry after the
+	// first failed with "the marked control could not be clicked".
+	return point(entry, `ai-entry-${Math.random().toString(36).slice(2, 10)}`);
 }
 
 // The panel's text, once it has finished writing.
@@ -925,6 +974,22 @@ export function aiEntryPoint() {
 // block: the prose above it is streamed, and everything after it is the input
 // box and the action row. Reading without that marker returns a truncated answer
 // that looks whole.
+// Whether the panel is up at all.
+//
+// This is a different question from whether it has written anything, and the two
+// were being answered by the same read: a press that landed on an overlay opened
+// no panel, and `ai.summary` said "still writing" for thirty seconds. The panel is
+// identified by its own container being laid out, not by any card inside it: the
+// cards render one at a time as the answer streams, so the first card appears
+// after the panel does and the panel can be up with nothing in it.
+export function aiPanelOpen(): { open: boolean } {
+	const open = findRendered<HTMLElement>(document, ".round-wrapper,[class*='a2ui-round-message']").some((element) => {
+		const box = element.getBoundingClientRect();
+		return box.width > 0 && box.height > 0;
+	});
+	return { open };
+}
+
 export function aiSummary() {
 	// The answer is a list of `round-card-item` blocks, and the disclaimer is the
 	// last of them. `.round-answer` is not the answer: it is a container whose five

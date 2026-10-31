@@ -22,7 +22,7 @@
 
 ## 会失败的东西
 
-**推荐流的评论面板可能塌成 0 宽。** 实测在推荐流里点评论图标只弹出「评论」tooltip，面板容器宽度停在 0，里面的评论行因此 `getBoundingClientRect().width === 0`，被 `rendered()` 全部滤掉——`comment list` 返回空，`comment post` 报 `selector_changed: Target control is hidden, disabled or covered`。同一作品用 `dy video open <id>` 打开详情页，评论照常可读可发。
+**推荐流的评论面板可能塌成 0 宽**（见下条，`comment open` 已经会等它）。 实测在推荐流里点评论图标只弹出「评论」tooltip，面板容器宽度停在 0，里面的评论行因此 `getBoundingClientRect().width === 0`，被 `rendered()` 全部滤掉——`comment list` 返回空，`comment post` 报 `selector_changed: Target control is hidden, disabled or covered`。同一作品用 `dy video open <id>` 打开详情页，评论照常可读可发。
 
 遇到 `comment.post` 的 `selector_changed`，先切详情页再发，不要在推荐流里反复重试。这类失败不会生成收据，所以也不存在重复发送的风险。
 

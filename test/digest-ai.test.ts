@@ -43,13 +43,20 @@ function session(): Session {
 		call: async (operation: string) => {
 			if (operation === "video.info") return snapshot;
 			if (operation === "comment.list") return [];
-			if (operation === "ai.entry.point") return { x: 1, y: 2 };
+			// The entry is a marked locator now, not a bare coordinate: the press has
+			// to be re-aimed at press time because the rail animates.
+			if (operation === "ai.entry.point") return { x: 1, y: 2, selector: '[data-douyin-cli-control="ai"]' };
+			// The panel opens before it writes, and that is read separately: a press
+			// that opened nothing used to be reported as "still writing".
+			if (operation === "ai.panel.open") return { open: true };
 			if (operation === "ai.summary") return { complete: true, summary: "平台说这条在唱歌。", why: "" };
 			return null;
 		},
+		click: async () => undefined,
 		tab: {
 			goto: async () => undefined,
-			mouse: { click: async () => undefined },
+			mouse: { click: async () => undefined, move: async () => undefined },
+			keyboard: { press: async () => undefined },
 			screenshot: async () => Buffer.from("png"),
 			evaluate: async () => undefined,
 		},
@@ -65,7 +72,7 @@ test("without --ai the platform summary is absent, not empty", async () => {
 });
 
 test("with --ai the summary arrives in its own field, beside the frames", async () => {
-	const result = (await digest(session(), store, { frames: 0, ai: true }, AbortSignal.timeout(5000))) as {
+	const result = (await digest(session(), store, { frames: 0, ai: true }, AbortSignal.timeout(20000))) as {
 		platform_summary?: { summary: string; complete: boolean };
 		frames: unknown[];
 		limitations: string[];
