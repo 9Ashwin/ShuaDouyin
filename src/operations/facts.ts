@@ -46,22 +46,52 @@ export async function selectorsInSource(source: string): Promise<string[]> {
 	return [...found].sort();
 }
 
-export async function pageFactsRead(session: { call: <T>(op: string, args?: object) => Promise<T> }, source: string) {
+/**
+ * Filter markers to the ones the caller asked about.
+ *
+ * A page carries about thirty-five markers and a caller almost always wants one
+ * of them, to answer "is this control here". Returning all of them cost about
+ * 5 KB per call, which is most of a small context window spent on names nobody
+ * read. A trailing `*` matches a prefix, so `--selector 'chat*'` answers "what
+ * chat markers does this page have".
+ */
+function selectMarkers<T extends { selector: string }>(markers: T[], wanted: string | undefined): T[] {
+	const pattern = (wanted ?? "").trim();
+	if (!pattern) return markers;
+	if (pattern.endsWith("*")) {
+		const prefix = pattern.slice(0, -1);
+		return markers.filter((marker) => marker.selector.startsWith(prefix));
+	}
+	return markers.filter((marker) => marker.selector === pattern);
+}
+
+export async function pageFactsRead(
+	session: { call: <T>(op: string, args?: object) => Promise<T> },
+	source: string,
+	wanted?: string,
+) {
 	const facts = await session.call<{
 		url: string;
 		title: string;
 		markers: { selector: string; count: number; visible: number }[];
 	}>("page.facts", {});
 	const used = await selectorsInSource(source);
+	// The comparison runs over every marker even when the caller narrowed the
+	// view: it is about the page and the code, not about what was asked for.
 	const comparison = factsComparison({ markers: facts.markers.map((marker) => marker.selector) }, used);
+	const selected = selectMarkers(facts.markers, wanted);
 	return {
 		url: facts.url,
 		title: facts.title,
 		collected_at: new Date().toISOString(),
-		markers: facts.markers,
+		markers: selected,
 		code_selectors: used.length,
 		page_markers: facts.markers.length,
-		...comparison,
+		// With a filter the caller asked one question, so the full comparison is
+		// noise: absent_here alone was 1.2 KB on a page with two matching markers,
+		// and none of it is about the marker that was asked for. The unfiltered call
+		// still returns the whole picture, which is what a diagnostic wants.
+		...(wanted ? { filter: wanted, matched: selected.length } : comparison),
 		limitations: [
 			"Only markers present in this page are reported; a selector missing here may exist on another page.",
 			"Page structure changes between builds, so a snapshot describes one moment.",

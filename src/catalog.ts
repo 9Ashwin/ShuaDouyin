@@ -758,9 +758,17 @@ export const COMMANDS: CommandSpec[] = [
 	{
 		id: "page.facts",
 		description: "Compare the page's real data-e2e markers against the ones the code uses",
+		flags: [
+			{
+				key: "target",
+				name: "--selector <marker>",
+				description: "Only this marker, or a prefix ending in *",
+				type: "string",
+			},
+		],
 		effect: "read",
 		guidance:
-			"Reports which selectors the adapter relies on that this page does not have, and which markers the page offers that nothing uses. A fixture written by hand cannot catch this: it was written from the same understanding that produced the code. Read-only.",
+			"Reports which selectors the adapter relies on that this page does not have, and which markers the page offers that nothing uses. A fixture written by hand cannot catch this: it was written from the same understanding that produced the code. A page carries about thirty-five markers and a caller usually needs one; --selector <marker> or --selector 'chat*' returns just that, and is what to use when the question is whether a control is present. Works only on the current page; opening a different one first is the caller's job. Read-only.",
 	},
 	{
 		id: "live.info",

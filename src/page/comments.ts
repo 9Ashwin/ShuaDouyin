@@ -260,29 +260,35 @@ export function readComments(videoID: string) {
 					/pending|sending|reviewing/.test(status) ||
 					owned('[data-e2e="comment-pending"],[aria-busy="true"]').length > 0;
 				const failed = /failed|rejected|error/.test(status) || owned('[data-e2e="comment-failed"]').length > 0;
+				// Every field that is usually absent is written only when it is there.
+				// video_id was on every row and is the same on all of them, so it is the
+				// caller's one value rather than 21 bytes repeated per comment; images,
+				// voice and the four booleans were mostly false or empty, and a reader
+				// skimming ten comments paid for them ten times.
 				return {
 					id: commentID(row),
-					video_id: videoID,
 					parent_id:
 						row.getAttribute("data-parent-comment-id") ??
 						commentID(row.parentElement?.closest('[data-e2e="comment-item"]') ?? null),
 					text: content,
 					kind,
 					...(voice ? { voice } : {}),
-					images,
+					...(images.length ? { images } : {}),
 					author: clean(author?.textContent),
 					author_url: author?.href ?? null,
 					likes,
-					liked_by_author: likedByAuthor,
-					mine,
-					pending,
-					failed,
-					sent: !!commentID(row) && mine && !pending && !failed,
+					...(likedByAuthor ? { liked_by_author: true } : {}),
+					...(mine ? { mine: true } : {}),
+					...(pending ? { pending: true } : {}),
+					...(failed ? { failed: true } : {}),
+					// `sent` is derivable from the three above, so it is written only when
+					// it says something they do not already.
+					...(!!commentID(row) && mine && !pending && !failed ? { sent: true } : {}),
 				};
 			})
 			// A voice comment with no transcript has neither text nor images, and
 			// dropping it is what made them read as missing rather than as voice.
-			.filter((comment) => comment.id && (comment.text || comment.images.length || comment.kind === "voice"))
+			.filter((comment) => comment.id && (comment.text || comment.images?.length || comment.kind === "voice"))
 	);
 }
 

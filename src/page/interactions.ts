@@ -66,12 +66,15 @@ export interface Args {
 	pixels: number;
 }
 
+// The fields the send path actually compares. Everything else a comment row can
+// carry is optional and often absent, and typing it as required is what made the
+// adapter write `false` on every row.
 type RecordRow = {
 	id: string | null;
 	text: string;
 	timestamp?: string | null;
-	pending: boolean;
-	failed: boolean;
+	pending?: boolean;
+	failed?: boolean;
 	// A sticker has no text at all, so it is identified by kind instead.
 	kind?: string;
 };

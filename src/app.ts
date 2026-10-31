@@ -550,7 +550,7 @@ export class App {
 				return listForwardRecipients(session, signal);
 			}
 			case "page.facts":
-				return pageFactsRead(session, sourceCheckout().path ?? process.cwd());
+				return pageFactsRead(session, sourceCheckout().path ?? process.cwd(), input.target);
 			case "live.info":
 				return liveInfo(session);
 			case "live.chat":
