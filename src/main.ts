@@ -108,11 +108,19 @@ export function createProgram(io: Streams, parentSignal?: AbortSignal, version =
 			const { app: appOptions, globals } = options(command);
 			const input: Input = { dry_run: globals.dryRun, request_id: globals.requestId };
 			const local = command.opts<Record<string, unknown>>();
+			// Which flags the caller actually typed, as opposed to the defaults the
+			// catalog fills in. Resuming a round has to tell "the caller wants thirty
+			// works" from "commander put thirty here because nothing was said", or a
+			// resumed five-minute round quietly becomes a thirty-minute one.
+			const stated: string[] = [];
 			for (const flag of spec.flags ?? []) {
 				const option = new Option(flag.name);
 				const value = local[option.attributeName()];
-				if (value !== undefined) Object.assign(input, { [flag.key]: value });
+				if (value === undefined) continue;
+				Object.assign(input, { [flag.key]: value });
+				if (command.getOptionValueSource(option.attributeName()) === "cli") stated.push(flag.key);
 			}
+			if (stated.length) Object.assign(input, { _stated: stated });
 			if (spec.argument) Object.assign(input, { [spec.argument.key]: values[0] });
 			const signal = AbortSignal.any([
 				...(parentSignal ? [parentSignal] : []),

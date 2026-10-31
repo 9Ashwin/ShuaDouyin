@@ -26,6 +26,7 @@ import { addGoal, discover, pauseGoal } from "./operations/discover.ts";
 import { keepFindings } from "./operations/learn.ts";
 import { evolvePersona, migratePersonaDocument, personaSection, presetOf } from "./operations/persona-evolve.ts";
 import { personaSurface } from "./operations/persona-surface.ts";
+import { parsePlan } from "./operations/plan.ts";
 import { resetApply, resetPlan } from "./operations/reset.ts";
 import { parseSources, signals } from "./operations/signals.ts";
 import {
@@ -188,14 +189,25 @@ export class Knowledge {
 					return { operation, acknowledged_at: new Date().toISOString() };
 				});
 			case "browse.start":
-				return this.workspaces.lock(() =>
-					startRound(new Store(this.workspaces.base), {
+				return this.workspaces.lock(async () => {
+					// The plan is validated whole before anything is stored, so a bad
+					// field cannot leave half a round behind.
+					const raw = input.text?.trim() || (input.text_file ? await readFile(input.text_file, "utf8") : "");
+					const plan = raw ? parsePlan(JSON.parse(raw) as unknown) : undefined;
+					const stated = new Set(input._stated ?? []);
+					return startRound(new Store(this.workspaces.base), {
 						works: input.budget,
 						minutes: input.minutes,
 						idle: input.idle,
 						goal: input.goal,
-					}),
-				);
+						...(plan ? { plan } : {}),
+						explicit: {
+							works: stated.has("budget"),
+							minutes: stated.has("minutes"),
+							idle: stated.has("idle"),
+						},
+					});
+				});
 			case "browse.end":
 				return this.workspaces.lock(() =>
 					endRound(new Store(this.workspaces.base), input.resource ?? "", input.reason ?? ""),

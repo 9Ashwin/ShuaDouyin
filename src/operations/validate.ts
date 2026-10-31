@@ -86,6 +86,9 @@ export interface Input {
 	// Deleting is irreversible and the page asks for no confirmation, so the caller
 	// has to say it means it.
 	confirm?: boolean;
+	// Which flags the caller typed, as opposed to defaults filled in by the
+	// catalog. Set by the argument parser, never by a caller.
+	_stated?: string[];
 }
 
 export function isWrite(operation: string): boolean {

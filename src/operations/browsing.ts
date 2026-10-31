@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { CliError } from "../errors.ts";
 import type { Event, Store } from "../store.ts";
 import { observations, uniqueObservations } from "./observations.ts";
+import { type Plan, planIdentity } from "./plan.ts";
 
 // A browsing round is one stretch of looking. The CLI records its boundary and
 // what happened inside it so that "how much did it watch, what did it skip, why
@@ -17,6 +18,12 @@ export interface Round {
 	goal: string | null;
 	status: "open" | "closed";
 	end_reason: string | null;
+	// What this round is for, when the caller stated it. Absent for rounds that
+	// only carried a budget, which is every round started before this existed.
+	plan?: Plan;
+	// A canonical form of the plan, so a resume can tell "the same plan" from
+	// "a plan with the same fields written in another order".
+	plan_identity?: string;
 }
 
 // Why a work was passed over. Recorded because "how many did it skip" is only
@@ -31,13 +38,44 @@ function record(event: Event): Record<string, unknown> {
 
 export async function startRound(
 	store: Store,
-	options: { works?: number; minutes?: number; idle?: number; goal?: string } = {},
+	options: {
+		works?: number;
+		minutes?: number;
+		idle?: number;
+		goal?: string;
+		plan?: Plan;
+		explicit?: { works?: boolean; minutes?: boolean; idle?: boolean };
+	} = {},
 ) {
 	const events = await store.events();
 	const open = rounds(events).find((round) => round.status === "open");
 	// A round left open by a session that died is resumed rather than duplicated:
 	// two open rounds would each claim their own budget and neither would be true.
-	if (open) return { ...open, resumed: true };
+	//
+	// But only the same round. A caller arriving with a different plan, or with a
+	// budget it stated out loud, is asking for something the open round is not —
+	// and merging the two would produce a round that matches neither.
+	if (open) {
+		const identity = options.plan ? planIdentity(options.plan) : null;
+		if (identity && open.plan_identity !== identity)
+			throw new CliError("revision_conflict", "An open round has a different plan", {
+				hint: "Close it with `dy browse end` and start a new round, so the old one keeps its own record.",
+				details: { open_round: open.id },
+			});
+		// A flag the caller passed is a requirement, not a default. Commander fills
+		// in 30 and 30 when nothing was given, and treating that as "the caller
+		// wants 30" would silently widen a resumed five-minute round.
+		const stated = options.explicit ?? {};
+		const conflicts = (["works", "minutes", "idle"] as const).filter(
+			(key) => stated[key] && options[key] !== undefined && options[key] !== open.budget[key],
+		);
+		if (conflicts.length)
+			throw new CliError("revision_conflict", `The open round uses a different ${conflicts.join(", ")}`, {
+				hint: "Close it with `dy browse end`, or resume it with the budget it already has.",
+				details: { open_round: open.id, budget: open.budget },
+			});
+		return { ...open, resumed: true };
+	}
 	const budget = {
 		works: options.works ?? 30,
 		minutes: options.minutes ?? 30,
@@ -46,8 +84,20 @@ export async function startRound(
 	if (budget.works < 1 || budget.minutes < 1 || budget.idle < 1)
 		throw new CliError("invalid_argument", "Budget values must be positive");
 	const id = randomUUID();
-	await store.append("browse.start", { id, budget, ...(options.goal ? { goal: options.goal } : {}) });
-	return { id, started_at: new Date().toISOString(), budget, goal: options.goal ?? null, status: "open" as const };
+	await store.append("browse.start", {
+		id,
+		budget,
+		...(options.goal ? { goal: options.goal } : {}),
+		...(options.plan ? { plan: options.plan, plan_identity: planIdentity(options.plan) } : {}),
+	});
+	return {
+		id,
+		started_at: new Date().toISOString(),
+		budget,
+		goal: options.goal ?? null,
+		...(options.plan ? { plan: options.plan } : {}),
+		status: "open" as const,
+	};
 }
 
 export async function endRound(store: Store, id: string, reason: string) {
@@ -88,6 +138,8 @@ export function rounds(events: Event[]): Round[] {
 					idle: typeof budget.idle === "number" ? budget.idle : 5,
 				},
 				goal: typeof data.goal === "string" ? data.goal : null,
+				...(data.plan && typeof data.plan === "object" ? { plan: data.plan as Plan } : {}),
+				...(typeof data.plan_identity === "string" ? { plan_identity: data.plan_identity } : {}),
 				status: "open",
 				end_reason: null,
 			});

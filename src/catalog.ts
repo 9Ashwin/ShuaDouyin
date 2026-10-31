@@ -514,10 +514,17 @@ export const COMMANDS: CommandSpec[] = [
 				default: 5,
 			},
 			{ key: "goal", name: "--goal <id>", description: "Goal this round serves", type: "string" },
+			{
+				key: "text_file",
+				name: "--text-file <path>",
+				description: "Plan JSON: what this round delivers and how it is judged",
+				type: "string",
+			},
+			{ key: "text", name: "--text <json>", description: "The same plan as an inline JSON object", type: "string" },
 		],
 		effect: "local",
 		guidance:
-			"A round left open by a session that died is resumed, not duplicated: two open rounds would each claim a budget and neither would be true. The budget is advisory — browse round says it is spent, and the caller decides to close.",
+			"A round left open by a session that died is resumed, not duplicated: two open rounds would each claim a budget and neither would be true. A plan states what this round delivers, which criteria a candidate must meet and what to do when progress stops; it is validated whole before anything is stored and cannot be changed afterwards, so a different plan needs a closed round first. Resuming with a different plan, or with a budget flag that disagrees with the open round, returns revision_conflict rather than merging the two. The budget is advisory — browse round says it is spent, and the caller decides to close.",
 	},
 	{
 		id: "browse.end",
