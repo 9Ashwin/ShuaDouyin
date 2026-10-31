@@ -30,7 +30,7 @@ export interface AiAnswer {
 }
 
 const LIMITS =
-	"This is Douyin's assistant answering about its own content, not an observation of any work. Treat the prose as a lead to check by opening the work, and quote it as the platform's claim rather than as something this tool saw. The ids are real page links and can be opened with dy video open.";
+	"This is Douyin's assistant answering about its own content, not an observation of any work. Treat the prose as a lead to check by opening the work, and quote it as the platform's claim rather than as something this tool saw. The ids are real page links; read one with any command that takes --video-id. The feed decides when it is served.";
 
 export async function askDouyin(session: Session, input: Input, signal: AbortSignal): Promise<AiAnswer> {
 	const question = (input.query ?? "").trim();

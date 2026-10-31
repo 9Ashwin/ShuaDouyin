@@ -435,9 +435,12 @@ export class TerminalUI {
 			} else {
 				const row = resources[Number(selected.slice(5))];
 				if (!row) continue;
+				// A search result used to lead to `video open`. There is no such command
+				// now: reaching a work means the feed serving it. What a result can do
+				// from here is be read by id, which every work command accepts.
 				if (command.id === "search") {
-					next = COMMANDS.find((item) => item.id === "video.open");
-					initial = { resource: String(row.id) };
+					next = COMMANDS.find((item) => item.id === "video.digest");
+					initial = { video_id: String(row.id) };
 				}
 				if (command.id === "comment.list") {
 					next = COMMANDS.find((item) => item.id === "comment.reply");

@@ -60,7 +60,7 @@ export async function deleteComment(
 		const current = state.video?.id ?? state.note?.id ?? null;
 		if (!current || (videoID && current !== videoID))
 			throw new CliError("identity_mismatch", "The page is not showing the requested work", {
-				hint: "Open the work with dy video open <id> first.",
+				hint: "Put the work on screen first: dy feed open, then dy feed next until it is showing.",
 				details: { expected: videoID, current },
 			});
 		const target = await session.call<{ hover: { x: number; y: number }; text: string }>("comment.delete.open", {

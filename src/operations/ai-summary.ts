@@ -30,41 +30,29 @@ export const AI_SUMMARY_LIMITS = [
 ];
 
 export async function readAiSummary(session: Session, input: Input, signal: AbortSignal): Promise<AiSummary> {
-	const open = await session.call<{ video?: { id?: string }; url?: string | null }>("video.info", input);
-	const workID = input.video_id ?? open.video?.id ?? null;
-	if (!workID) throw new CliError("unsupported_media", "There is no work on screen to summarise");
-	// The panel lives on the feed's overlay, not on the /video/<id> detail page.
+	// The work named, and the work on screen, and nothing else.
 	//
-	// The page is reopened unless it is already the right form showing the right
-	// work, and that condition is checked rather than assumed. Three states reach
-	// here and two of them need a navigation:
+	// This used to navigate: it preferred the requested id and opened `?modal_id=`
+	// when the page held something else. That lands on 精选's overlay, not the
+	// recommended feed — the platform redirects the URL — and a command that
+	// silently moved the page somewhere else is how a browsing round ends up lost.
 	//
-	//   /video/<id> detail      the menu is laid out at 0×0, so reopen
-	//   ?modal_id=<other work>  a previous command left it on a different work
-	//   ?modal_id=<this work>   already right, reopen would wipe the panel
-	//
-	// The middle one is why this is a comparison and not a URL pattern: `video open`
-	// lands on /jingxuan?modal_id=…, which looks like the overlay but can be showing
-	// whatever was open last.
-	const overlayWork = open.url ? new URL(open.url).searchParams.get("modal_id") : null;
-	const rightForm = !!overlayWork && overlayWork === workID;
-	if (!rightForm) {
-		await session.tab.goto(`https://www.douyin.com/?modal_id=${workID}`, { waitUntil: "domcontentloaded" });
-		await delay(1500, undefined, { signal });
-	}
-	// The work the panel will describe is whatever is on screen, so the page is
-	// asked directly rather than trusted to be the one that was requested.
-	const shown = await session.call<{ video?: { id?: string } | null }>("video.info", {});
-	if (!shown.video?.id)
+	// So it reads what is on screen and refuses when that is not what was asked
+	// for. Reaching a particular work is the feed's job: `feed next` until it
+	// arrives. A read that answers about a different work is worse than no answer.
+	const open = await session.call<{ video?: { id?: string } | null }>("video.info", {});
+	const shown = open.video?.id ?? null;
+	if (!shown)
 		throw new CliError("unsupported_media", "The page is not showing a work", {
-			hint: "Open it with dy video open <id> first.",
-			details: { asked: workID },
+			hint: "Run dy feed open, then dy feed next until the work is on screen.",
+			details: { asked: input.video_id ?? null },
 		});
-	if (shown.video.id !== workID)
+	if (input.video_id && input.video_id !== shown)
 		throw new CliError("identity_mismatch", "The page is showing a different work than the one asked for", {
-			hint: "Open it again with dy video open, then retry.",
-			details: { asked: workID, showing: shown.video.id },
+			hint: "Advance the feed until it is showing the requested work, then retry.",
+			details: { asked: input.video_id, showing: shown },
 		});
+	const workID = shown;
 	// Autoplay is what made this expensive and unreliable. A short work finishes
 	// while the panel is still writing, the feed advances, and the panel goes with
 	// it — so the wait ran out on a work the page was no longer showing. Pausing is

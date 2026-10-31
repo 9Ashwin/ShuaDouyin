@@ -198,8 +198,6 @@ function prepareControl(args: Args) {
 				);
 				break;
 			}
-			case "comment.panel":
-				return commentPanel();
 			case "comment.activate":
 				// The composer sits below a long comment list, so it is laid out far
 				// outside the viewport on a detail page. Presence, not visibility, is
@@ -397,6 +395,8 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 		case "search.users":
 			guardPage();
 			return userResults();
+		case "comment.panel":
+			return commentPanel();
 		case "comment.list":
 			return readComments(args.video_id);
 		case "comment.image.prepare":

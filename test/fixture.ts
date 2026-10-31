@@ -143,9 +143,8 @@ function applyDetailLayout(detail){
 function setVideo(id,keepRoute){q('#player').setAttribute('data-video-id',id);q('[data-e2e="player-container"]').className='video_'+id;if(!keepRoute)history.replaceState({},'', '/video/'+id);}
 if(route&&NOTE_IDS.has(route[1]))history.replaceState({},'', '/note/'+route[1]);
 else if(route){setLive(null);setVideo(route[1]);applyDetailLayout(DETAIL_IDS.has(route[1]));}
-// The overlay form addresses one work by ?modal_id= on the feed's own route, which
-// is what video open now navigates to. An image post opened that way has to render
-// as a note, and a video has to render its player.
+// The overlay form addresses one work by ?modal_id= on the feed's own route. An
+// image post opened that way has to render as a note, and a video its player.
 const modality=new URL(location.href).searchParams.get('modal_id');
 if(modality){
   if(NOTE_IDS.has(modality)){q('#player').style.display='none';q('#note').style.display='block';q('#note').dataset.noteId=modality;history.replaceState({},'','/note/'+modality);}

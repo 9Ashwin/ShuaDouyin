@@ -128,14 +128,12 @@ dy context show --query "The question for this task"
 dy feed sweep --count 5
 ```
 
-`feed sweep` stops the feed on the last work it read. `video open` reopens one of
-them in the feed's own overlay — the same surface, with the like rail, the AI
-summary and the more-menu all present. `dy feed open` returns to the feed:
+`feed sweep` stops the feed on the last work it read. To look at one of them again,
+read it by id — the tool does not leave the feed for a single work:
 
 ```bash
-dy video open <video-id>            # same surface, opened by id
-dy video digest --video-id <video-id> --limit 5
-dy feed open                        # back to the feed
+dy video digest --video-id <video-id> --limit 5   # read by id; the page checks it is that work
+dy feed next                                      # carry on browsing
 ```
 
 `dy guide` returns instructions matching the installed version; `dy schema` describes commands, arguments and effects. Run one workspace operation at a time to avoid account-lock conflicts.

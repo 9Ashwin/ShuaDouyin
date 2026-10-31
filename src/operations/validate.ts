@@ -215,9 +215,6 @@ export function validate(operation: string, raw: Input): Input {
 			if (input.published && !["any", "day", "week", "half-year"].includes(input.published))
 				throw new CliError("invalid_argument", "--published must be any, day, week or half-year");
 			break;
-		case "video.open":
-			input.video_id = resourceID(input.resource ?? "", "video");
-			break;
 		case "link.resolve":
 			if (!input.resource || input.resource.length > 4000)
 				throw new CliError("invalid_argument", "Provide a Douyin link or share text up to 4000 characters");

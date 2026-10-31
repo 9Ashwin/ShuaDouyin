@@ -13,14 +13,9 @@ function activity(event: Event, account: string) {
 	const data = object(event.data);
 	const work = object(data.video ?? data.note);
 	const titleChars = typeof work.title === "string" ? Array.from(work.title.trim()) : [];
-	const publicWork = [
-		"video.info",
-		"video.open",
-		"video.observe",
-		"note.capture",
-		"note.next",
-		"note.previous",
-	].includes(event.operation);
+	const publicWork = ["video.info", "video.observe", "note.capture", "note.next", "note.previous"].includes(
+		event.operation,
+	);
 	const writeWork = [
 		"comment.post",
 		"comment.reply",

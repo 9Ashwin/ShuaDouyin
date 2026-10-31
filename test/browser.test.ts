@@ -80,8 +80,19 @@ test(
 		// behaviour, and a fixture that would never exercise the page again.
 		const run = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
+		// Put a chosen work on screen. `video open` used to do this and is gone: the
+		// tool does not navigate to a work any more, because every route that
+		// addresses one is a different surface. These tests still need a specific
+		// work, so they navigate the fixture directly and then use the normal read
+		// path — which is what the command would have done.
+		const openWork = async (id: string) => {
+			await witness?.tab.goto(`https://www.douyin.com/video/${id}`, { waitUntil: "domcontentloaded" });
+			await witness?.tab.waitForTimeout(120);
+			return witness?.call("video.info", {});
+		};
+
 		await t.test("navigation and session persistence between independent connections", async () => {
-			const opened = (await app.execute("video.open", { resource: "12345" }, signal)) as { video: { id: string } };
+			const opened = (await openWork("12345")) as { video: { id: string } };
 			assert.equal(opened.video.id, "12345");
 			const status = (await app.execute("video.info", {}, signal)) as { video: { id: string } };
 			assert.equal(status.video.id, "12345");
@@ -94,7 +105,7 @@ test(
 			// The fixture's video has no media, so a real duration cannot be seeked.
 			// What can be checked is that the position reaches the element and that
 			// a request the work cannot satisfy is refused rather than clamped.
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await witness?.tab.evaluate(() => {
 				const video = document.querySelector("video") as HTMLVideoElement & { __duration?: number };
 				Object.defineProperty(video, "duration", { get: () => 120, configurable: true });
@@ -108,7 +119,7 @@ test(
 		});
 
 		await t.test("a press swallowed on an unchanged slide is retried once", async () => {
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			// The first press is ignored and the page stays put. Retrying is safe
 			// here precisely because the page is still on the work it started from.
 			await witness?.tab.evaluate(() => Reflect.set(window, "swallowOnce", true));
@@ -122,7 +133,7 @@ test(
 			// The panel is an overlay, not a different page: a read does not need it.
 			// Closing is refused while the composer holds a draft, and that refusal
 			// is the point — a read must never discard an unsent message.
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await app.execute("chat.list", {}, signal);
 			await witness?.tab.evaluate(() => {
 				const im = document.querySelector("#im");
@@ -149,7 +160,7 @@ test(
 		});
 
 		await t.test("the feed moves off a live slide, which has no work identity", async () => {
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await app.execute("feed.next", {}, signal);
 			// The next press lands on the live slide, which carries no work id at
 			// all. The one after that is swallowed by the live player overlay, so
@@ -240,7 +251,7 @@ test(
 				search.items.map((item) => item.id),
 				["12345", "67890"],
 			);
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 		});
 
 		await t.test("search filters verify controls without claiming results refreshed", async () => {
@@ -298,7 +309,7 @@ test(
 			await assert.rejects(witness?.call("search.filters.state", { query: "测试" }) ?? Promise.resolve(), {
 				code: "selector_changed",
 			});
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 		});
 
 		await t.test("reply expansion is bounded, asynchronous and rejects ambiguous controls", async () => {
@@ -402,7 +413,7 @@ test(
 			if (!point) throw new Error("Missing expansion point");
 			await witness?.tab.mouse.click(point.x, point.y);
 			assert.equal(await witness?.tab.locator("#test-changed-work").getAttribute("data-clicked"), null);
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 		});
 
 		await t.test("observation reports when the video is outside the viewport", async () => {
@@ -792,7 +803,7 @@ test(
 		});
 
 		await t.test("mismatched targets and existing drafts cannot dispatch", async () => {
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await assert.rejects(
 				app.execute("comment.post", { video_id: "99999", text: "wrong", request_id: "fixture-wrong-01" }, signal),
 				{ code: "identity_mismatch" },
@@ -1547,11 +1558,11 @@ test(
 			assert.equal(found.items[0].signature, "分享旅途");
 			assert.equal(found.complete, false);
 			assert.equal(found.scope, "loaded_dom");
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 		});
 
 		await t.test("image posts are read as notes, not as a broken video page", async () => {
-			const opened = (await app.execute("video.open", { resource: "70001" }, signal)) as {
+			const opened = (await openWork("70001")) as {
 				video: unknown;
 				note: { id: string; url: string; images: { ready: boolean }[]; slide: { index: number | null; count: number } };
 				page_kind: string;
@@ -1689,7 +1700,7 @@ test(
 			};
 			assert.deepEqual(withoutCounter.note.slide, { index: null, count: null });
 			// The same work ID is accepted in its /note/ form too.
-			await app.execute("video.open", { resource: "https://www.douyin.com/note/70001" }, signal);
+			await openWork("70001");
 		});
 
 		await t.test("steering less reads the page's own toast, and never claims a state", async () => {
@@ -1698,7 +1709,7 @@ test(
 			// work leaves the feed, and neither says whether it applied. 推荐 is a
 			// switch whose own label is its state. Treating them alike was the bug
 			// that made the first real call report "already in that state".
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await witness?.tab.evaluate(() => {
 				Reflect.set(window, "steerClicks", 0);
 				Reflect.set(window, "toasts", []);
@@ -1723,7 +1734,7 @@ test(
 			// earlier version read only the toast, so every "less" in the overlay came
 			// back delivery_uncertain, and an uncertain press is the one thing that
 			// invites a second one.
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await witness?.tab.evaluate(() => {
 				Reflect.set(window, "steerClicks", 0);
 				// The overlay's progress: the page moves to another work when the
@@ -1757,7 +1768,7 @@ test(
 			// On, then off, then on again. Each direction has to be a different
 			// request: asking for "not more" over a receipt for "more" would answer
 			// one instruction with the other.
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			// The switch is state that outlives a test: an earlier one may have left it
 			// on, and asserting "turning it on flipped it" only means anything from a
 			// known start.
@@ -1789,7 +1800,7 @@ test(
 		});
 
 		await t.test("asking the more switch for the state it already holds does not press", async () => {
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await witness?.tab.evaluate(() => Reflect.set(window, "steerClicks", 0));
 			const same = (await app.execute(
 				"video.steer",
@@ -1805,7 +1816,7 @@ test(
 		await t.test("a steer refuses a work the page is not showing", async () => {
 			// The menu is laid out for the neighbouring slide too. Naming the work is
 			// what keeps a press from landing on the one behind it.
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await assert.rejects(
 				app.execute("video.steer", { video_id: "67890", direction: "less", request_id: `steer-wrong-${run}` }, signal),
 				{ code: "identity_mismatch" },
@@ -1816,7 +1827,7 @@ test(
 			// Both spellings end the same way: video-player-no-digged and
 			// video-player-is-digged. Matching the suffix called an unliked work
 			// liked, so a like reported no change and an unlike never confirmed.
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			const reading = async () =>
 				witness?.tab.evaluate(() => {
 					const el = document.querySelector('[data-e2e="video-player-digg"]');
@@ -1841,7 +1852,7 @@ test(
 		});
 
 		await t.test("image posts use their own like control and never the video one", async () => {
-			await app.execute("video.open", { resource: "70001" }, signal);
+			await openWork("70001");
 			const liked = (await app.execute("video.like", { video_id: "70001", enabled: true }, signal)) as {
 				confirmed: boolean;
 			};
@@ -1858,7 +1869,7 @@ test(
 		});
 
 		await t.test("a note page without note controls fails closed", async () => {
-			await app.execute("video.open", { resource: "70001" }, signal);
+			await openWork("70001");
 			await witness?.tab.evaluate(() => {
 				document.querySelector('[data-e2e="note-collect"]')?.remove();
 			});
@@ -1866,11 +1877,11 @@ test(
 				app.execute("video.favorite", { video_id: "70001", enabled: true, request_id: "fixture-note-01" }, signal),
 				{ code: "selector_changed" },
 			);
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 		});
 
 		await t.test("forwarding does not treat a disappearing row as a delivery receipt", async () => {
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			const input = {
 				recipient_id: "secuid:MS4wLjABAAAAshare01",
 				video_id: "12345",
@@ -1893,7 +1904,7 @@ test(
 		});
 
 		await t.test("forwarding refuses an unknown recipient instead of picking one", async () => {
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await assert.rejects(
 				app.execute(
 					"chat.forward",
@@ -1997,7 +2008,7 @@ test(
 		});
 
 		await t.test("an uncertain dispatch is persisted and never automatically retried", async () => {
-			await app.execute("video.open", { resource: "12345" }, signal);
+			await openWork("12345");
 			await witness?.tab.evaluate(() => {
 				document.querySelector('[data-e2e="comment-post"]')?.addEventListener(
 					"click",

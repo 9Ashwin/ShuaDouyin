@@ -77,7 +77,7 @@ export async function navigate(session: Session, url: string, kind: string, sign
 			const landed = String((error.details as { url?: unknown } | undefined)?.url ?? "");
 			if (landed && !landed.includes("/user/"))
 				throw new CliError("not_found", "This profile redirected elsewhere", {
-					hint: "Douyin sent this account somewhere other than its profile: it may be restricted, deleted, or require a fresh login. Run dy auth status, or open one of their works with dy video open.",
+					hint: "Douyin sent this account somewhere other than its profile: it may be restricted, deleted, or require a fresh login. Run dy auth status.",
 					details: { requested: url, landed },
 				});
 		}

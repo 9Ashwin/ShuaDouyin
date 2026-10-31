@@ -38,7 +38,7 @@ interface Round {
 function worksOf(operation: string, data: Record<string, unknown>): { works: string[]; depth: Depth } {
 	const id = (value: unknown) => (typeof value === "string" && /^\d{1,64}$/.test(value) ? value : null);
 	// A single current work.
-	if (["video.info", "video.open"].includes(operation)) {
+	if (["video.info"].includes(operation)) {
 		const value = id(data.video_id) ?? id(data.id);
 		return { works: value ? [value] : [], depth: "inspect" };
 	}

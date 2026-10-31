@@ -216,11 +216,9 @@ function forwardButton(userid: string): HTMLElement | undefined {
 // what the page reacts to, so this returns the icon when it is present.
 export function shareEntry(): HTMLElement {
 	guardVideo();
-	// The share control is in the current slide's rail, whatever form the page is
-	// in. Scoping to `feed-active-video` only found it on the feed: the overlay that
-	// `video open` now lands on marks the slide as `video-detail`, so the entry was
-	// missing there and every forward from an opened work failed before it could
-	// open a panel.
+	// The share control is in the current slide's rail. Scoping to `feed-active-video`
+	// only found it on the feed; other forms that render a slide mark it differently,
+	// and the entry was missing there.
 	const slide = currentSlide();
 	if (!slide) fail("identity_mismatch", "The page is between slides");
 	const entries = find(slide.root, '[data-e2e="video-player-share"],[data-e2e="video-share-icon-container"]');

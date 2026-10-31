@@ -855,7 +855,7 @@ export const COMMANDS: CommandSpec[] = [
 		],
 		effect: "navigation",
 		guidance:
-			"Douyin's 抖音 AI answers in prose and often lists works with links. That is a different kind of evidence from everything else here: the rest reports what the page shows, this reports what the platform's model says about its own content. Treat the answer as a lead to check by opening the work, and quote it as the platform's claim. The work ids it links to are real page links and can be opened with video open. Answers stream in; complete=false means the read gave up before the text stopped growing.",
+			"Douyin's 抖音 AI answers in prose and often lists works with links. That is a different kind of evidence from everything else here: the rest reports what the page shows, this reports what the platform's model says about its own content. Treat the answer as a lead to check by opening the work, and quote it as the platform's claim. The work ids it links to are real page links; use link resolve to read the id and feed next to find the work. Answers stream in; complete=false means the read gave up before the text stopped growing.",
 	},
 	{
 		id: "search",
@@ -888,18 +888,6 @@ export const COMMANDS: CommandSpec[] = [
 		effect: "read",
 		guidance:
 			"Direct work URLs are resolved locally. Short links use bounded redirects without browser credentials; unsupported or expired links fail. Tracking parameters are omitted.",
-	},
-	{
-		id: "video.open",
-		description: "Open a public work by ID or canonical Douyin URL, video or image post",
-		argument: {
-			key: "resource",
-			name: "id-or-url",
-			description: "Work ID, https://www.douyin.com/video/<id> or /note/<id>",
-		},
-		effect: "navigation",
-		guidance:
-			"Douyin redirects an image post from /video/<id> to /note/<id>. Read the result to see which kind the page is.",
 	},
 	{
 		id: "video.info",
@@ -990,7 +978,7 @@ export const COMMANDS: CommandSpec[] = [
 		],
 		effect: "account_write",
 		guidance:
-			"Read video info first and name the work with --video-id; the menu that holds these controls is also rendered on the next slide, and pressing it there acts on a work the caller never named. less is an instruction rather than a switch — the page reports no state for it, so it always presses and one press is one instruction. more is a switch: --value false turns it back off, and asking for the state it already holds does not press. The menu exists on the recommended feed and on the ?modal_id= overlay, so a detail page is reopened in that form first. Confirmation is the page's own toast or the menu's own label; anything else is delivery_uncertain and is never retried automatically.",
+			"Read video info first and name the work with --video-id; the menu that holds these controls is also rendered on the next slide, and pressing it there acts on a work the caller never named. less is an instruction rather than a switch — the page reports no state for it, so it always presses and one press is one instruction. more is a switch: --value false turns it back off, and asking for the state it already holds does not press. The menu exists on the recommended feed and on the ?modal_id= overlay; nothing is navigated, so the work has to be the one on screen. Confirmation is the page's own toast or the menu's own label; anything else is delivery_uncertain and is never retried automatically.",
 	},
 	{
 		id: "video.favorites",

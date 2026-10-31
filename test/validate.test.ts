@@ -38,28 +38,32 @@ test("request ids are the idempotency key, so a malformed one is refused everywh
 });
 
 test("a work URL and a bare id resolve to the same work", () => {
-	assert.equal(accepts("video.open", { resource: "12345" }).video_id, "12345");
-	assert.equal(accepts("video.open", { resource: "https://www.douyin.com/video/12345" }).video_id, "12345");
+	// `resourceID` is where the rule lives; it used to be exercised through
+	// `video open`, which no longer exists. The rule itself is still a contract:
+	// every command that takes a work resolves its id this way.
+	assert.equal(resourceID("12345", "video"), "12345");
+	assert.equal(resourceID("https://www.douyin.com/video/12345", "video"), "12345");
 	// An image post is addressed by the same id under a different path.
-	assert.equal(accepts("video.open", { resource: "https://www.douyin.com/note/70001" }).video_id, "70001");
+	assert.equal(resourceID("https://www.douyin.com/note/70001", "video"), "70001");
 });
 
 test("a URL that only looks like Douyin is refused", () => {
 	// The host check is what stops a lookalike domain from being read as a work,
 	// and a credential in the URL is refused rather than stripped.
-	rejects("video.open", { resource: "https://douyin.com.evil.example/video/12345" });
-	rejects("video.open", { resource: "http://www.douyin.com/video/12345" });
-	rejects("video.open", { resource: "https://user:pass@www.douyin.com/video/12345" });
-	rejects("video.open", { resource: "https://www.douyin.com/user/12345" });
-	rejects("video.open", { resource: "https://www.douyin.com/video/" });
-	rejects("video.open", { resource: "" });
+	assert.throws(() => resourceID("https://douyin.com.evil.example/video/12345", "video"), { code: "invalid_argument" });
+	assert.throws(() => resourceID("http://www.douyin.com/video/12345", "video"), { code: "invalid_argument" });
+	assert.throws(() => resourceID("https://user:pass@www.douyin.com/video/12345", "video"), {
+		code: "invalid_argument",
+	});
+	assert.throws(() => resourceID("https://www.douyin.com/user/12345", "video"), { code: "invalid_argument" });
+	assert.throws(() => resourceID("https://www.douyin.com/video/", "video"), { code: "invalid_argument" });
 });
 
 test("the signed-in account may be addressed as self, and nothing else may", () => {
 	assert.equal(accepts("user.get", { resource: "self" }).user_id, "self");
 	assert.equal(accepts("user.get", { resource: "MS4wLjABAAAAauthor01" }).user_id, "MS4wLjABAAAAauthor01");
 	// A work has a numeric id; asking for a work called self is a mistake, not an alias.
-	rejects("video.open", { resource: "self" });
+	assert.throws(() => resourceID("self", "video"), { code: "invalid_argument" });
 });
 
 test("numbers are refused when they are outside the range the page can honour", () => {

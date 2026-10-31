@@ -101,35 +101,22 @@ export async function steerWork(
 			{},
 		);
 		const current = state.video?.id ?? state.note?.id ?? null;
-		// The menu exists on the feed and on the overlay, and nowhere else. The test
-		// is which form the page is in, not whether its URL mentions a work: a detail
-		// page is the form without the menu, and reopening one that way is the only
-		// correct response.
+		if (!current) throw new CliError("unsupported_media", "There is no work on screen to steer");
+		// The work is whichever one is on screen, and a request for a different one
+		// is refused rather than chased.
 		//
-		// An earlier version keyed on `/video/` appearing in the URL. On the overlay
-		// the page's own route is `/jingxuan?modal_id=…`, but the adapter reports the
-		// work's canonical URL, so the page was read as a detail page and reopened on
-		// every call — which navigates, and a navigation throws away the menu state
-		// the previous call had just set.
-		const overlayWork = state.url ? new URL(state.url).searchParams.get("modal_id") : null;
-		const workID = input.video_id ?? current;
-		if (!workID) throw new CliError("unsupported_media", "There is no work on screen to steer");
-		const inOverlay = overlayWork === workID;
-		if (!inOverlay && state.url && /\/video\/|\/note\//.test(state.url) && !overlayWork) {
-			await session.tab.goto(`https://www.douyin.com/?modal_id=${workID}`, { waitUntil: "domcontentloaded" });
-			await delay(1500, undefined, { signal });
-		}
-		const shown = await session.call<{ video?: { id?: string } | null }>("video.info", {});
-		const shownID = shown.video?.id ?? null;
-		if (!shownID)
-			throw new CliError("identity_mismatch", "The page is not showing a work", {
-				hint: "Open the work with dy video open <id>, or run this on the recommended feed.",
-			});
-		if (workID !== shownID)
+		// This used to prefer the requested id and navigate to it when the page held
+		// something else. That turned a mismatch into a navigation: it left the feed,
+		// landed on a surface with a different control layout, and every later call
+		// did the same thing again. The check is the point — a press must land on the
+		// work the caller named, and the only way to be sure is that the page is
+		// already showing it.
+		if (input.video_id && input.video_id !== current)
 			throw new CliError("identity_mismatch", "The page is showing a different work than the one asked for", {
-				hint: "Open it again with dy video open, then retry.",
-				details: { asked: workID, showing: shownID },
+				hint: "Run this with that work on screen: dy feed open, then dy feed next until it arrives.",
+				details: { asked: input.video_id, showing: current },
 			});
+		const workID = current;
 		// Opening the menu is a hover, not a press: the control only carries
 		// mouseenter handlers, and a press on it does nothing on the feed.
 		//

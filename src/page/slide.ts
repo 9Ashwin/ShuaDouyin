@@ -1,4 +1,4 @@
-import { fail, find, findRendered, one } from "./dom.ts";
+import { fail, findRendered, one } from "./dom.ts";
 
 // Which work is on screen.
 //
@@ -145,33 +145,4 @@ export function commentPanel(): { open: boolean; rows: number; root: HTMLElement
 	const root = open[0] ?? null;
 	const rows = root ? root.querySelectorAll('[data-e2e="comment-item"]').length : 0;
 	return { open: !!root, rows, root };
-}
-
-// The control rail inside the current slide.
-//
-// Like, favorite, share, the more-menu and the AI entry all live here. Scoping to
-// the current slide's root is what keeps a press from reaching the neighbouring
-// slide's rail, which the feed lays out and which looks identical.
-export function currentRail(): { root: HTMLElement; controls: HTMLElement[] } {
-	const slide = currentSlide();
-	if (!slide) fail("identity_mismatch", "The page is between slides");
-	const controls = find<HTMLElement>(
-		slide.root,
-		'[data-e2e="video-player-digg"],[data-e2e="video-player-collect"],[data-e2e="video-player-share"],[data-e2e="video-play-more"],[class*="ai-douyin-entry"]',
-	);
-	if (!controls.length)
-		fail(
-			"selector_changed",
-			"The current slide has no control rail",
-			"The slide may still be rendering, or this page's layout is not the feed's.",
-		);
-	return { root: slide.root, controls };
-}
-
-// Where a press can be aimed at one of those controls: the control, if it is
-// inside the current slide and actually pressable.
-export function railControl(selector: string): HTMLElement {
-	const { controls } = currentRail();
-	const matches = controls.filter((element) => element.matches(selector));
-	return one(matches, `control ${selector} on the current slide`);
 }

@@ -49,7 +49,7 @@ dy video digest
 
 **推荐流里读到的作者和标题可能来自相邻滑片。** 实测一次 `video.info` 给出了作品 A 的 ID，却配着相邻滑片作品的标题和作者——两个作者都是真的，一个属前一张滑片，一个属后一张。
 
-核对身份不需要换页。`video open` 打开的是同一个界面的浮层，但换页本身会把正在刷的那条冲掉，当前进度没了。要确认就直接再读一次 `video.info`：`slide.id` 稳定、`video_selection.ambiguous` 为 false，就是同一条。
+核对身份不需要换页——工具也没有换页去某条作品的命令。直接再读一次 `video.info`：`slide.id` 稳定、`video_selection.ambiguous` 为 false，就是同一条。
 
 写命令自己也会核对：`video like` / `comment post` / `video steer` 在点击前都比对当前作品 id，对不上就拒绝，不会点错。
 
