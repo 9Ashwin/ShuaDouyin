@@ -232,12 +232,13 @@ export function knownVoices(memories: Memory[]): unknown {
 // replaced by an empty 0x0 box. Every comment read and send on that page then
 // failed with a control that could not be measured.
 async function panelVisible(session: Session): Promise<boolean> {
-	const list = session.tab.locator('[data-e2e="comment-list"],[data-e2e="comment-item"]');
-	const attached = await list.count().catch(() => 0);
-	if (!attached) return false;
-	// A list that is attached is enough: the panel is open. It is deliberately not
-	// a visibility test, because a panel below the fold is still open.
-	return true;
+	// Asked of the page, not of the DOM's row count. "A comment row is attached"
+	// reported open on a work whose panel had never been opened, because the feed
+	// keeps the rows of an earlier work mounted. The panel is identified by its own
+	// container being laid out — the same rule the page adapter uses everywhere
+	// else, which is the point: one answer to "is the panel open".
+	const state = await session.call<{ open: boolean }>("comment.panel").catch(() => null);
+	return state?.open ?? false;
 }
 
 // Closing is the panel's own X. It is the second svg to the right of the tab

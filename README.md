@@ -128,11 +128,12 @@ dy context show --query "这次要解决的问题"
 dy feed sweep --count 5
 ```
 
-从结果中选出作品 ID 后，先打开对应详情页，再采样：
+`feed sweep` 会把推荐流停到最后一条。要细看其中某条，`video open` 把它重新打开成推荐流自带的浮层——同一个界面，右侧点赞栏、AI 摘要、不感兴趣菜单都在。读完 `dy feed open` 回到流里：
 
 ```bash
-dy video open <video-id>
+dy video open <video-id>            # 同一个界面，换个入口
 dy video digest --video-id <video-id> --limit 5
+dy feed open                        # 回到推荐流
 ```
 
 `dy guide` 提供与当前安装版本一致的使用说明；`dy schema` 提供命令、参数和副作用类型。一次只运行一个工作区操作，避免账号锁冲突。

@@ -57,7 +57,6 @@ import {
 	installGuard,
 	prepareWrite,
 	smileyTrigger,
-	videoRoot,
 	writeResult,
 } from "./interactions.ts";
 import {
@@ -79,7 +78,6 @@ import {
 	authenticatedUser,
 	chatRoot,
 	cleanupChatMedia,
-	currentVideo,
 	guardPage,
 	guardVideo,
 	messageTarget,
@@ -99,6 +97,7 @@ import {
 	verifyChatMedia,
 } from "./readers.ts";
 import { openSearchFilters, prepareSearchFilter, searchFilterState } from "./search.ts";
+import { commentPanel, currentPlayer, currentSlideRoot } from "./slide.ts";
 import { armSteer, cleanupSteer, prepareSteer, steerOpener, steerOutcome } from "./steer.ts";
 
 function checkChatDraft(): void {
@@ -163,7 +162,8 @@ function prepareControl(args: Args) {
 				// noteRoot() also matches the recommend feed's swiper, which is not a
 				// post surface at all. Asking the route what this page is keeps the
 				// note layout scoped to image posts and everything else on the work.
-				const scope = routeKind(location.href).kind === "note" ? (noteRoot() ?? videoRoot()) : videoRoot();
+				const scope =
+					routeKind(location.href).kind === "note" ? (noteRoot() ?? currentSlideRoot()) : currentSlideRoot();
 				const cands = find(
 					scope,
 					// The recommended feed names this entry differently from the detail
@@ -198,6 +198,8 @@ function prepareControl(args: Args) {
 				);
 				break;
 			}
+			case "comment.panel":
+				return commentPanel();
 			case "comment.activate":
 				// The composer sits below a long comment list, so it is laid out far
 				// outside the viewport on a detail page. Presence, not visibility, is
@@ -250,7 +252,7 @@ function relationModal(): HTMLElement | null {
 
 async function recordAudio(seconds: number) {
 	guardVideo();
-	const video = currentVideo() as HTMLVideoElement & { captureStream?: () => MediaStream };
+	const video = currentPlayer() as HTMLVideoElement & { captureStream?: () => MediaStream };
 	if (!video.captureStream || !globalThis.MediaRecorder)
 		fail("unsupported_media", "Chrome cannot capture this video audio track");
 	const tracks = video.captureStream().getAudioTracks();
@@ -790,7 +792,7 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			// The caller clicks through a locator that waits for the control to
 			// settle, so this only installs the guard and marks the target. It is
 			// the same scope resolution prepareControl uses.
-			const scope = routeKind(location.href).kind === "note" ? (noteRoot() ?? videoRoot()) : videoRoot();
+			const scope = routeKind(location.href).kind === "note" ? (noteRoot() ?? currentSlideRoot()) : currentSlideRoot();
 			const candidates = find(
 				scope,
 				'[data-e2e="video-player-comment"],[data-e2e="note-comment"],[data-e2e="comment-button"],[data-e2e="feed-comment-icon"]',
@@ -835,15 +837,15 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			return prepareControl(args);
 		case "video.play":
 			guardVideo(args.video_id);
-			await currentVideo().play();
+			currentPlayer().play();
 			return readPageState();
 		case "video.pause":
 			guardVideo(args.video_id);
-			currentVideo().pause();
+			currentPlayer().pause();
 			return readPageState();
 		case "video.seek": {
 			guardVideo(args.video_id);
-			const element = currentVideo();
+			const element = currentPlayer();
 			const at = args.at;
 			if (typeof at !== "number" || !Number.isFinite(at) || at < 0)
 				fail("invalid_argument", "A seek needs a non-negative position in seconds");

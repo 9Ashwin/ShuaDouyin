@@ -48,7 +48,7 @@ interface SteerReport {
 	value: boolean;
 	// What the page said after the press, verbatim.
 	toast: string | null;
-	evidence: "page_toast" | "menu_label" | "already" | null;
+	evidence: "page_toast" | "menu_label" | "moved_on" | "already" | null;
 	limits: string[];
 }
 
@@ -101,33 +101,45 @@ export async function steerWork(
 			{},
 		);
 		const current = state.video?.id ?? state.note?.id ?? null;
-		const onDetail = !!state.url && /\/video\/|\/note\//.test(state.url);
-		if (onDetail) {
-			// The menu only exists on the feed and on the modal overlay. A detail page
-			// is laid out differently — `video-play-more` there is 0×0 — so the work is
-			// reopened in the form that has the menu. `modal_id` addresses one work
-			// directly; walking the feed until it came round again would pass over
-			// every work in between, and each of those is a decision this tool does not
-			// get to make.
-			const workID = input.video_id ?? current;
-			if (!workID) throw new CliError("unsupported_media", "There is no work on screen to steer");
+		// The menu exists on the feed and on the overlay, and nowhere else. The test
+		// is which form the page is in, not whether its URL mentions a work: a detail
+		// page is the form without the menu, and reopening one that way is the only
+		// correct response.
+		//
+		// An earlier version keyed on `/video/` appearing in the URL. On the overlay
+		// the page's own route is `/jingxuan?modal_id=…`, but the adapter reports the
+		// work's canonical URL, so the page was read as a detail page and reopened on
+		// every call — which navigates, and a navigation throws away the menu state
+		// the previous call had just set.
+		const overlayWork = state.url ? new URL(state.url).searchParams.get("modal_id") : null;
+		const workID = input.video_id ?? current;
+		if (!workID) throw new CliError("unsupported_media", "There is no work on screen to steer");
+		const inOverlay = overlayWork === workID;
+		if (!inOverlay && state.url && /\/video\/|\/note\//.test(state.url) && !overlayWork) {
 			await session.tab.goto(`https://www.douyin.com/?modal_id=${workID}`, { waitUntil: "domcontentloaded" });
 			await delay(1500, undefined, { signal });
 		}
 		const shown = await session.call<{ video?: { id?: string } | null }>("video.info", {});
-		const workID = shown.video?.id ?? null;
-		if (!workID)
+		const shownID = shown.video?.id ?? null;
+		if (!shownID)
 			throw new CliError("identity_mismatch", "The page is not showing a work", {
 				hint: "Open the work with dy video open <id>, or run this on the recommended feed.",
 			});
-		if (input.video_id && workID !== input.video_id)
+		if (workID !== shownID)
 			throw new CliError("identity_mismatch", "The page is showing a different work than the one asked for", {
 				hint: "Open it again with dy video open, then retry.",
-				details: { asked: input.video_id, showing: workID },
+				details: { asked: workID, showing: shownID },
 			});
 		// Opening the menu is a hover, not a press: the control only carries
 		// mouseenter handlers, and a press on it does nothing on the feed.
+		//
+		// The pointer has to leave first. A press in an earlier command leaves it
+		// sitting on the control, and a mouseenter does not fire again for a pointer
+		// that never moved — so the menu stays shut and the state read comes from a
+		// strip that is not there.
 		const opener = await session.call<{ x: number; y: number }>("steer.opener", {});
+		await session.tab.mouse.move(opener.x, Math.max(0, opener.y - 120));
+		await delay(120, undefined, { signal });
 		await session.tab.mouse.move(opener.x, opener.y);
 		await waitForMenu(session, signal);
 		const token = randomUUID();
@@ -177,7 +189,7 @@ export async function steerWork(
 		receipt.updated_at = new Date().toISOString();
 		await deps.store.saveReceipt(receipt);
 		await session.click(armed);
-		const outcome = await settleSteer(session, { direction, value, toastBefore, signal });
+		const outcome = await settleSteer(session, { direction, value, work: workID, toastBefore, signal });
 		if (!outcome.confirmed) {
 			// The press may have landed and the page simply did not say so in the
 			// window. Reporting "did not apply" would invite a second press, which is a
@@ -249,22 +261,33 @@ async function waitForMenu(session: Session, signal: AbortSignal): Promise<void>
 
 // What the page said after the press.
 //
-// "Less" is read from the toast alone. The strip closes on the press and the work
-// leaves the feed, so neither the menu nor the work id says anything — a closed
-// strip is also what a press outside looks like.
+// "Less" is confirmed differently in the two forms the menu exists in, and that
+// difference is the page's, not this command's:
 //
-// "More" is a switch and its state is the evidence, but the strip closes on that
-// press too, so reading it means reopening the menu once the page has settled.
-// The toast case is kept for the cancel direction, where the page does announce
-// it ("已取消推荐").
+//   on the feed     the page says so with a toast, and the feed moves on
+//   in the overlay  it says nothing, and the overlay moves to the next work:
+//                   `modal_id` changes under the reader
+//
+// Both are the platform acknowledging the instruction, and both mean the same
+// thing — this work is done with. Reading only the toast made every "less" in the
+// overlay unprovable, and an unprovable press is reported as uncertain, which is
+// the one thing that invites a second one.
+//
+// What must not be mistaken for confirmation is the overlay moving on its own, so
+// the press and the change have to be close in time: the work read at the start of
+// this call is the work that was pressed, and a different work a moment later is
+// the page moving because of it.
+//
+// "More" is a switch and its state is the evidence; the strip closes on that press
+// too, so reading it means reopening the menu once the page has settled.
 async function settleSteer(
 	session: Session,
-	options: { direction: Direction; value: boolean; toastBefore: string | null; signal: AbortSignal },
+	options: { direction: Direction; value: boolean; work: string; toastBefore: string | null; signal: AbortSignal },
 ): Promise<{
 	confirmed: boolean;
 	value: boolean;
 	toast: string | null;
-	evidence: "page_toast" | "menu_label" | null;
+	evidence: "page_toast" | "menu_label" | "moved_on" | null;
 }> {
 	const deadline = Date.now() + 6000;
 	let toast: string | null = null;
@@ -274,7 +297,16 @@ async function settleSteer(
 		options.signal.throwIfAborted();
 		await delay(250, undefined, { signal: options.signal });
 		clicks++;
-		const outcome = await session.call<{ toast: string | null; open: boolean; labels: string[] }>("steer.outcome", {});
+		const outcome = await session.call<{ toast: string | null; open: boolean; labels: string[]; work: string | null }>(
+			"steer.outcome",
+			{},
+		);
+		// The overlay's "less" closes the strip and says nothing else. A strip that is
+		// shut, on the work that was asked for, after a press this command armed, is
+		// that press landing: nothing else closes it.
+		if (options.direction === "less" && !outcome.open && outcome.work && outcome.work !== options.work) {
+			return { confirmed: true, value: true, toast, evidence: "moved_on" };
+		}
 		// A toast that was already on screen is not evidence for this press. The
 		// comparison is on text, so a lingering "已取消推荐" cannot confirm a "less".
 		if (outcome.toast && outcome.toast !== options.toastBefore) {

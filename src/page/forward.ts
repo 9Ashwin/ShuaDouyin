@@ -1,5 +1,6 @@
 import { clean, fail, find, one, own, type Point, point, reactProps } from "./dom.ts";
 import { guardVideo } from "./readers.ts";
+import { currentSlide } from "./slide.ts";
 
 // Native share panel: forwarding a work as a platform card instead of a plain
 // URL.
@@ -215,13 +216,15 @@ function forwardButton(userid: string): HTMLElement | undefined {
 // what the page reacts to, so this returns the icon when it is present.
 export function shareEntry(): HTMLElement {
 	guardVideo();
-	const entries = find(document, '[data-e2e="feed-active-video"] [data-e2e="video-player-share"]');
-	const fallback = entries.length ? entries : find(document, '[data-e2e="video-share-icon-container"]');
-	const laidOut = fallback.filter((element) => {
-		const rect = element.getBoundingClientRect();
-		return rect.width > 0 && rect.height > 0;
-	});
-	const entry = one(laidOut, "share entry");
+	// The share control is in the current slide's rail, whatever form the page is
+	// in. Scoping to `feed-active-video` only found it on the feed: the overlay that
+	// `video open` now lands on marks the slide as `video-detail`, so the entry was
+	// missing there and every forward from an opened work failed before it could
+	// open a panel.
+	const slide = currentSlide();
+	if (!slide) fail("identity_mismatch", "The page is between slides");
+	const entries = find(slide.root, '[data-e2e="video-player-share"],[data-e2e="video-share-icon-container"]');
+	const entry = one(entries, "share entry");
 	const icon = find(entry, ".s7K4YLGp");
 	return icon.length === 1 ? icon[0] : entry;
 }

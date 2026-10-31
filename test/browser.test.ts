@@ -75,6 +75,11 @@ test(
 			else await route.abort();
 		});
 
+		// Request ids are receipt keys, and receipts outlive a run. A test that reuses
+		// one on its second run is answered from the first run's receipt — correct
+		// behaviour, and a fixture that would never exercise the page again.
+		const run = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
 		await t.test("navigation and session persistence between independent connections", async () => {
 			const opened = (await app.execute("video.open", { resource: "12345" }, signal)) as { video: { id: string } };
 			assert.equal(opened.video.id, "12345");
@@ -1700,7 +1705,7 @@ test(
 			});
 			const result = (await app.execute(
 				"video.steer",
-				{ video_id: "12345", direction: "less", request_id: "steer-less-0001" },
+				{ video_id: "12345", direction: "less", request_id: `steer-less-${run}` },
 				signal,
 			)) as { confirmed: boolean; changed: boolean; toast: string | null; evidence: string; value: boolean };
 			assert.equal(result.confirmed, true);
@@ -1712,13 +1717,35 @@ test(
 			assert.equal(await witness?.tab.evaluate("window.steerClicks"), 1);
 		});
 
+		await t.test("steering less in the overlay is confirmed by the work moving on", async () => {
+			// The overlay says nothing after 不感兴趣: no toast, no label change. What it
+			// does is advance to the next work — modal_id changes under the reader. An
+			// earlier version read only the toast, so every "less" in the overlay came
+			// back delivery_uncertain, and an uncertain press is the one thing that
+			// invites a second one.
+			await app.execute("video.open", { resource: "12345" }, signal);
+			await witness?.tab.evaluate(() => {
+				Reflect.set(window, "steerClicks", 0);
+				// The overlay's progress: the page moves to another work when the
+				// instruction lands, exactly as the live page does.
+				Reflect.set(window, "advanceOnSteer", true);
+			});
+			const result = (await app.execute(
+				"video.steer",
+				{ video_id: "12345", direction: "less", request_id: `steer-moved-${run}` },
+				signal,
+			)) as { confirmed: boolean; evidence: string };
+			assert.equal(result.confirmed, true);
+			assert.equal(result.evidence, "moved_on");
+		});
+
 		await t.test("the same steer request replays without pressing again", async () => {
 			// A second press is a second instruction to the platform. A replayed
 			// request id has to answer from the receipt, not from the page.
 			await witness?.tab.evaluate(() => Reflect.set(window, "steerClicks", 0));
 			const replay = (await app.execute(
 				"video.steer",
-				{ video_id: "12345", direction: "less", request_id: "steer-less-0001" },
+				{ video_id: "12345", direction: "less", request_id: `steer-less-${run}` },
 				signal,
 			)) as { confirmed: boolean; changed: boolean };
 			assert.equal(replay.confirmed, true);
@@ -1731,9 +1758,17 @@ test(
 			// request: asking for "not more" over a receipt for "more" would answer
 			// one instruction with the other.
 			await app.execute("video.open", { resource: "12345" }, signal);
+			// The switch is state that outlives a test: an earlier one may have left it
+			// on, and asserting "turning it on flipped it" only means anything from a
+			// known start.
+			await witness?.tab.evaluate(() => {
+				Reflect.set(window, "moreState", false);
+				const label = document.querySelector("#video-more-like");
+				if (label) label.textContent = "推荐";
+			});
 			const on = (await app.execute(
 				"video.steer",
-				{ video_id: "12345", direction: "more", enabled: true, request_id: "steer-more-0001" },
+				{ video_id: "12345", direction: "more", enabled: true, request_id: `steer-on-${run}` },
 				signal,
 			)) as { confirmed: boolean; value: boolean; evidence: string };
 			assert.equal(on.confirmed, true);
@@ -1742,7 +1777,7 @@ test(
 			assert.equal(await witness?.tab.evaluate("window.moreState"), true);
 			const off = (await app.execute(
 				"video.steer",
-				{ video_id: "12345", direction: "more", enabled: false, request_id: "steer-more-0002" },
+				{ video_id: "12345", direction: "more", enabled: false, request_id: `steer-off-${run}` },
 				signal,
 			)) as { confirmed: boolean; value: boolean; evidence: string; toast: string | null };
 			assert.equal(off.confirmed, true);
@@ -1758,7 +1793,7 @@ test(
 			await witness?.tab.evaluate(() => Reflect.set(window, "steerClicks", 0));
 			const same = (await app.execute(
 				"video.steer",
-				{ video_id: "12345", direction: "more", enabled: false, request_id: "steer-more-0003" },
+				{ video_id: "12345", direction: "more", enabled: false, request_id: `steer-same-${run}` },
 				signal,
 			)) as { confirmed: boolean; changed: boolean; evidence: string };
 			assert.equal(same.confirmed, true);
@@ -1772,7 +1807,7 @@ test(
 			// what keeps a press from landing on the one behind it.
 			await app.execute("video.open", { resource: "12345" }, signal);
 			await assert.rejects(
-				app.execute("video.steer", { video_id: "67890", direction: "less", request_id: "steer-wrong-0001" }, signal),
+				app.execute("video.steer", { video_id: "67890", direction: "less", request_id: `steer-wrong-${run}` }, signal),
 				{ code: "identity_mismatch" },
 			);
 		});

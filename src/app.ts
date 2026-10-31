@@ -546,8 +546,22 @@ export class App {
 				return session.call(operation, input);
 			case "feed.open":
 				return openRecommendFeed(session, signal);
-			case "video.open":
-				return navigate(session, `https://www.douyin.com/video/${input.video_id}`, "video", signal);
+			case "video.open": {
+				// Opened as the feed's overlay, not as the standalone /video/<id> page.
+				//
+				// The two pages show the same work but not the same controls. The
+				// standalone page is a reading page: its like and favorite live in a
+				// bottom bar, the AI summary has no entry at all, and the more-menu that
+				// holds 不感兴趣 is laid out at 0x0. The overlay is the feed's own shape —
+				// the right-hand rail with like, favorite, share, the AI entry, and the
+				// more-menu — so every command that works on a slide also works here.
+				//
+				// Opening the overlay is also what keeps a browsing round coherent: a
+				// caller that wants a specific work gets the same surface it would have
+				// had if the feed had served it.
+				const opened = await navigate(session, `https://www.douyin.com/?modal_id=${input.video_id}`, "video", signal);
+				return { ...opened, form: "overlay" };
+			}
 			case "search": {
 				await navigate(
 					session,

@@ -65,7 +65,7 @@ dy page scroll --pixels 1200
 | 想做什么 | 命令 |
 | --- | --- |
 | 刷推荐流 | `dy feed open` / `dy feed next` / `dy feed previous` |
-| 打开一条指定作品 | `dy video open <id-or-url>` |
+| 打开一条指定作品（浮层形态） | `dy video open <id-or-url>` |
 | 分享文本或链接转 ID | `dy link resolve <text>` |
 | 读当前作品 | `dy video info` |
 | 搜索 | `dy search <词>`、`dy user search <词>` |
@@ -118,7 +118,9 @@ dy video audio --seconds 10 --output a.webm
 
 `--frames 0` 只读身份和评论，不采样——筛候选时用这个，比每条都截图快得多。
 
-**推荐流就是工作台，不要每条都 `video open` 跳详情页。** `video open` 会换页，把正在刷的那条冲掉，还会触发一次完整的页面加载。刷和养号都在推荐流里做：`feed next` / `feed sweep` 换条，`video digest` / `video ai` 直接读当前条。只有搜索结果、或者用户给了个具体链接要看，才需要 `video open`。
+**`video open` 打开的是推荐流自带的浮层，不是独立的详情页。** 同一个界面：右侧点赞栏、AI 摘要、不感兴趣菜单都在。所以打开一条具体作品和刷到它，能做的事完全一样。
+
+刷和养号仍以 `feed next` / `feed sweep` 为主，因为那才是一条接一条地看；`video open` 用在你要**指定**某一条的时候——用户给了链接，或者搜索结果里挑中了一条。
 
 **读 AI 摘要会自动暂停当前作品，读完再放回来。** 这不是副作用泄漏：一条 15 秒的作品在等你读摘要时早播完了，自动连播会把面板一起带走，于是等 30 秒什么都没读到。它同时也是这个功能的意义所在——摘要描述的是这条作品，播完了就已经是下一条了。
 

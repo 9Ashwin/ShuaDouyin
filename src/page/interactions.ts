@@ -110,27 +110,6 @@ declare global {
 	}
 }
 
-export function videoRoot(): HTMLElement {
-	// The feed preloads its neighbours, so several videos are laid out at once and
-	// requiring exactly one failed whenever the player had loaded the next slide.
-	// feed-active-video is not the answer either: during a transition it marks the
-	// slide that just left. The one actually on screen is what the reader is
-	// looking at, so the viewport decides.
-	const scoped = find<HTMLVideoElement>(document, "video").filter(
-		(element) => !element.closest('[data-e2e="im-dialog"]'),
-	);
-	const onScreen = scoped.filter((element) => {
-		const rect = element.getBoundingClientRect();
-		return rect.width > 0 && rect.height > 0 && rect.bottom > innerHeight * 0.2 && rect.top < innerHeight * 0.8;
-	});
-	const video = one(onScreen.length ? onScreen : scoped, "visible video");
-	const root =
-		video.closest<HTMLElement>('[data-e2e="feed-active-video"],[data-e2e="video-detail"]') ??
-		video.closest<HTMLElement>('[data-e2e="player-container"]');
-	if (!root) fail("selector_changed", "No scoped video container");
-	return root;
-}
-
 export function installGuard(
 	button: HTMLElement,
 	token: string,
@@ -180,6 +159,48 @@ export function installGuard(
 		for (const type of types) document.removeEventListener(type, listener, true);
 	};
 	window.__douyinCLIGuard = { cleanup, state, token };
+}
+
+// The row of like / comment / favorite / share under a work's detail page.
+//
+// It has no marker of its own. The one marked thing in it is the share icon, and
+// the shape that identifies the row is that it is that icon's parent with exactly
+// four clickable children — the same shape the live page has. Anchoring on the
+// share icon rather than on the counts keeps it from matching the author's own
+// profile card, which also shows numbers.
+function detailActionBar(): HTMLElement | null {
+	const share = find(document, '[data-e2e="video-share-icon-container"]')[0];
+	const bar = share?.parentElement;
+	if (!bar) return null;
+	if (bar.children.length !== 4) return null;
+	return bar;
+}
+
+function barControl(bar: HTMLElement, index: number): HTMLElement | null {
+	const child = bar.children[index];
+	return child instanceof HTMLElement ? child : null;
+}
+
+// Whether one of that row's buttons reads as on.
+//
+// The signal is a class on the icon inside the button, not on the button: the
+// inactive icon carries `prpiPAWb` and the active one does not, and it is the only
+// state this row states — no aria-pressed, no aria-label, no title, and the count
+// behind it belongs to the platform's own total rather than to this account's
+// action. Reading the button instead of its icon is what made the first attempt
+// report "already in that state" for two of the four controls.
+//
+// The class is per-build, so this is the last resort in the chain rather than the
+// first choice. It is still better than refusing: without it, no like or favorite
+// can be set from a detail page at all.
+function barActive(control: HTMLElement): boolean {
+	const marked = [...control.querySelectorAll<HTMLElement>("*")].filter((element) =>
+		/prpiPAWb/.test(element.className?.toString() ?? ""),
+	);
+	// Exactly one icon carries it when the button is off; an on button has none.
+	// More than one means the row changed shape and the reading is not this
+	// command's to guess at.
+	return marked.length === 0;
 }
 
 function toggleControl(action: string) {
@@ -234,10 +255,23 @@ function toggleControl(action: string) {
 		const rect = element.getBoundingClientRect();
 		return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight;
 	});
-	const button = one(
-		inView.length ? inView : candidates,
-		note ? (like ? "note like control" : "note favorite control") : like ? "like control" : "favorite control",
-	);
+	// The detail page lays its like and favorite controls out differently: the
+	// player rail still carries `video-player-digg` and `video-player-collect`, but
+	// both are 0×0 and unclickable, and the controls a person actually presses are
+	// an unmarked row under the work. Only the share icon in that row has a marker,
+	// so the row is found through it and the buttons are addressed by position
+	// within the row: like, comment, favorite, share, left to right.
+	//
+	// This is why a detail page used to fail with "Expected one like control, found
+	// 0" — the marker existed, at zero size, and nothing on screen matched.
+	const bar = detailActionBar();
+	const fromBar = bar && !inView.length ? barControl(bar, like ? 0 : 2) : null;
+	const button =
+		fromBar ??
+		one(
+			inView.length ? inView : candidates,
+			note ? (like ? "note like control" : "note favorite control") : like ? "like control" : "favorite control",
+		);
 	// The live page states the state in a marker of its own and no longer sets
 	// aria-pressed on these controls. Both spellings end the same way — "no-digged"
 	// is not liked and "is-digged" is — so the marker is read as a whole rather
@@ -263,6 +297,12 @@ function toggleControl(action: string) {
 			.filter((value): value is boolean => typeof value === "boolean"),
 	);
 	if (values.length && new Set(values).size === 1) return { button, value: values[0] };
+	// The detail bar states the state in a class on the icon instead: an inactive
+	// button carries `prpiPAWb` and an active one does not. It is a per-build class,
+	// so it is the last thing tried rather than the first — but it is the only
+	// signal this control offers, and refusing it would make the command unusable
+	// on every detail page.
+	if (fromBar) return { button, value: barActive(fromBar) };
 	fail("selector_changed", "Cannot determine the current toggle state");
 }
 

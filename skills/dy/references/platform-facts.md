@@ -22,9 +22,9 @@
 
 ## 会失败的东西
 
-**推荐流的评论面板可能塌成 0 宽**（见下条，`comment open` 已经会等它）。 实测在推荐流里点评论图标只弹出「评论」tooltip，面板容器宽度停在 0，里面的评论行因此 `getBoundingClientRect().width === 0`，被 `rendered()` 全部滤掉——`comment list` 返回空，`comment post` 报 `selector_changed: Target control is hidden, disabled or covered`。同一作品用 `dy video open <id>` 打开详情页，评论照常可读可发。
+**推荐流的评论面板可能塌成 0 宽**（见下条，`comment open` 已经会等它）。 实测在推荐流里点评论图标只弹出「评论」tooltip，面板容器宽度停在 0，里面的评论行因此 `getBoundingClientRect().width === 0`，被 `rendered()` 全部滤掉——`comment list` 返回空，`comment post` 报 `selector_changed: Target control is hidden, disabled or covered`。同一作品换个形态打开时评论照常可读可发，但**不要为了评论而换页**：先关掉塌陷的面板再打开一次就够了。
 
-遇到 `comment.post` 的 `selector_changed`，先切详情页再发，不要在推荐流里反复重试。这类失败不会生成收据，所以也不存在重复发送的风险。
+遇到 `comment.post` 的 `selector_changed`，先 `dy comment close` 关掉塌陷的面板，再打开一次。确实不行就换一条——同一条反复试不会有不同结果。这类失败不会生成收据，所以也不存在重复发送的风险。
 
 **推荐流里同一时刻有两个评论图标。** 一个在可视区外（`y` 为负），一个在屏内。代码里的 `find()` 会用 `visible()` 滤掉外面那个，但手写 `querySelector` 探查时拿到的是外面那个，量出来的坐标是负的——别据此判断页面坏了。
 
@@ -56,9 +56,15 @@
 - 右键消息点「回复」进入引用回复，引用状态在输入框上方的引用块里，不在编辑器文本里。
 - `chat.close` 会关掉遮挡作品的私信面板。**有未发出的草稿时它会拒绝**，草稿不会丢。
 
-## 详情页和推荐流不是同一套
+## 推荐流、浮层、独立详情页
 
-直接 `dy video open <id>` 打开的是详情页，它的评论区结构和推荐流里的不一样。推荐流里能用的定位在详情页可能失效，反之亦然。`comment list` 已经处理了两种，但看原始报错时要记得这一点。
+三种形态，前两种是同一套。
+
+- **推荐流**（`/?recommend=1`）：一条接一条，上下切换。
+- **浮层**（`/jingxuan?modal_id=<id>`）：`video open` 打开的形态。同一个界面，右侧点赞栏、AI 入口、不感兴趣菜单都在。
+- **独立详情页**（`/video/<id>`）：工具不会主动带你去。它的点赞收藏在底部栏，没有 AI 入口，不感兴趣菜单是 0×0。
+
+`comment list` 三种都能读。原始报错里的坐标和控件名在不同形态下不一样，看报错时记得先确认自己在哪一种。
 
 ## 评论区不是评论视频的
 

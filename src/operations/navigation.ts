@@ -51,8 +51,10 @@ export async function navigate(session: Session, url: string, kind: string, sign
 		session,
 		(state) =>
 			kind === "video"
-				? // Douyin redirects an image post from /video/ to /note/.
-					!!(state.video?.id ?? state.note?.id)
+				? // Douyin redirects an image post from /video/ to /note/. An image post
+					// renders no player at all, so waiting for a video would time out on a
+					// page that had loaded correctly — the route is the answer there.
+					!!(state.video?.id ?? state.note?.id) || state.page_kind === "note"
 				: kind === "agent"
 					? // The AI page reports itself as an ordinary page; what identifies it is
 						// the route and a composer being present.

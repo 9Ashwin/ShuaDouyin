@@ -173,16 +173,29 @@ export function armSteer(args: { token: string; video_id: string; direction: str
 // The strip closes on every press, so `open` is usually false and the caller has
 // to reopen it to read the switch. Both are reported rather than guessed, and a
 // null means "the page did not say", never "no".
-export function steerOutcome(): { toast: string | null; open: boolean; labels: string[] } {
+export function steerOutcome(): {
+	toast: string | null;
+	open: boolean;
+	labels: string[];
+	/** The work the page is showing after the press, when it can be read. */
+	work: string | null;
+} {
 	const toast =
 		find(document, '[data-e2e="toast"]')
 			.map((element) => clean(element.textContent))
 			.find((text) => text.length > 0) ?? null;
+	// The page's own route is where the current work is named. On the feed it is
+	// the slide the rail belongs to; in the overlay it is `modal_id`. Reading it is
+	// what lets a press be confirmed in the form that shows no toast.
+	const work =
+		new URL(location.href).searchParams.get("modal_id") ??
+		find<HTMLElement>(document, '[data-e2e="feed-active-video"]')[0]?.getAttribute("data-video-id") ??
+		null;
 	const hosts = find(document, '[data-e2e="video-player-no-like"]');
-	if (hosts.length !== 1) return { toast, open: false, labels: [] };
+	if (hosts.length !== 1) return { toast, open: false, labels: [], work };
 	const container = hosts[0].parentElement;
 	const labels = container ? [...container.children].map((child) => clean((child as HTMLElement).innerText)) : [];
-	return { toast, open: true, labels };
+	return { toast, open: true, labels, work };
 }
 
 // Clears the page-level witness once the operation is over.

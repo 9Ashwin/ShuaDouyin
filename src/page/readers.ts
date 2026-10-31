@@ -43,13 +43,6 @@ export interface Note {
 	slide: { index: number | null; count: number | null };
 }
 
-export function currentVideo(): HTMLVideoElement {
-	return one(
-		find<HTMLVideoElement>(document, "video").filter((element) => !element.closest(privateArea)),
-		"visible video",
-	);
-}
-
 // Image posts render their slides inside a swiper-like container. The index is
 // only reported when a single indicator marks the active slide; otherwise the
 // reader reports what it can count and leaves the index unknown.

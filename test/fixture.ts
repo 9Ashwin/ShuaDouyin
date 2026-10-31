@@ -11,6 +11,11 @@ export const fixture = `<!doctype html>
 <div data-e2e="video-player-digg" data-e2e-state="video-player-no-digged">点赞</div>
 <button data-e2e="video-player-collect" aria-pressed="false">收藏</button>
 <button data-e2e="video-player-comment">评论</button>
+<!-- The rail on the live page carries a share control of its own, inside the
+     slide. Without it the fixture's only share entry was the one in the bottom
+     bar, outside the slide, and forwarding from an opened work searched the whole
+     document to find it. -->
+<div data-e2e="video-player-share"><span class="s7K4YLGp">分享</span></div>
 <!-- The more-menu, in the shape the live feed renders it: one strip of five items,
      of which only 不感兴趣, 举报 and 快捷键列表 carry a marker. 推荐 has an empty
      data-e2e and is the only item identified by its own label, and that label is
@@ -25,6 +30,17 @@ export const fixture = `<!doctype html>
 <div class="r5aqUxRL" data-e2e="video-player-shoret-cut"><div class="Au3ppGJ6"></div><div class="CtbumKit">快捷键列表</div></div>
 </div>
 <div data-e2e="toast" id="video-toast" style="display:none"></div>
+<!-- A work's own detail page lays its controls out differently from the feed: the
+     player rail still carries video-player-digg and video-player-collect, but both
+     are 0x0, and the buttons a person presses are this unmarked row underneath.
+     Only the share icon in the row has a marker, which is how the row is found.
+     The state of each button is a class on its icon: prpiPAWb means off. -->
+<div id="detail-bar" style="display:none">
+<div class="o2tLobnl" id="detail-like"><div><div class="s7K4YLGp prpiPAWb"><svg width="20" height="20"></svg></div></div><span id="detail-like-count">100</span></div>
+<div class="o2tLobnl" id="detail-comment"><div><div class="s7K4YLGp prpiPAWb"><svg width="20" height="20"></svg></div></div><span>5</span></div>
+<div class="o2tLobnl" id="detail-favorite"><div><div class="s7K4YLGp prpiPAWb"><svg width="20" height="20"></svg></div></div><span>9</span></div>
+<div class="bJX7d7PL o2tLobnl" id="detail-share" data-e2e="video-share-icon-container"><div><div class="s7K4YLGp prpiPAWb"><svg width="20" height="20"></svg></div></div><span>3</span></div>
+</div>
 </section>
 <!-- The feed arrows live beside the slides, not inside one, so they stay
      clickable on a live slide the way they do on the real page. -->
@@ -106,9 +122,44 @@ const route=/^\\/video\\/(\\d+)/.exec(location.pathname);
 // Work ID 70001 is an image post upstream; Douyin answers /video/<id> with a
 // redirect to /note/<id>, so the fixture does the same.
 const NOTE_IDS=new Set(['70001']);
-function setVideo(id){q('#player').setAttribute('data-video-id',id);q('[data-e2e="player-container"]').className='video_'+id;history.replaceState({},'', '/video/'+id);}
+// 90001 is a work opened as its own page rather than inside the feed: the rail's
+// controls are laid out at 0x0 and the real ones live in the bottom action bar.
+const DETAIL_IDS=new Set(['90001']);
+// A work opened as its own page: the rail's controls are 0x0 and the real ones
+// sit in an unmarked row below.
+function applyDetailLayout(detail){
+  for(const e2e of ['video-player-digg','video-player-collect']){
+    const el=q('[data-e2e="'+e2e+'"]');
+    if(detail)Object.assign(el.style,{width:'0',height:'0',minWidth:'0',minHeight:'0',padding:'0',margin:'0',border:'0',overflow:'hidden'});
+    else el.removeAttribute('style');
+  }
+  q('#detail-bar').style.display=detail?'flex':'none';
+}
+// The overlay keeps its own route. setVideo used to rewrite the path to
+// /video/<id> every time, which is what the overlay does NOT do — it stays on
+// /jingxuan?modal_id=... — and the rewrite erased the query string that tells a
+// reader which form it is looking at. Commands then re-navigated on every call and
+// threw away the menu state the previous one had set.
+function setVideo(id,keepRoute){q('#player').setAttribute('data-video-id',id);q('[data-e2e="player-container"]').className='video_'+id;if(!keepRoute)history.replaceState({},'', '/video/'+id);}
 if(route&&NOTE_IDS.has(route[1]))history.replaceState({},'', '/note/'+route[1]);
-else if(route){setLive(null);setVideo(route[1]);}
+else if(route){setLive(null);setVideo(route[1]);applyDetailLayout(DETAIL_IDS.has(route[1]));}
+// The overlay form addresses one work by ?modal_id= on the feed's own route, which
+// is what video open now navigates to. An image post opened that way has to render
+// as a note, and a video has to render its player.
+const modality=new URL(location.href).searchParams.get('modal_id');
+if(modality){
+  if(NOTE_IDS.has(modality)){q('#player').style.display='none';q('#note').style.display='block';q('#note').dataset.noteId=modality;history.replaceState({},'','/note/'+modality);}
+  else{
+    setLive(null);setVideo(modality,true);
+    history.replaceState({},'','/?modal_id='+modality);
+    applyDetailLayout(DETAIL_IDS.has(modality));
+    // The overlay is the feed's own shape: the rail keeps its controls and the
+    // bottom bar belongs to the standalone detail page only. Leaving the bar
+    // visible here put a second, unmarked share control outside the slide, and a
+    // reader that searched the document instead of the slide found that one.
+    q('#detail-bar').style.display='none';
+  }
+}
 if(location.pathname.startsWith('/search/')){
 q('#player').style.display='none';
 if(new URL(location.href).searchParams.get('type')==='user')q('#user-results').style.display='block';
@@ -178,6 +229,11 @@ const emoji=document.createElement('div');emoji.setAttribute('data-e2e','message
 row.append(content);q('[data-e2e="message-list"]').append(row);panel.remove();};
 panel.append(item);});
 document.body.append(panel);});
+window.detailLikes=0;window.detailFavorites=0;
+const toggleDetail=(buttonId,countId,counter)=>{const b=q('#'+buttonId);const icon=b.querySelector('.s7K4YLGp');const off=icon.classList.contains('prpiPAWb');
+icon.classList.toggle('prpiPAWb',!off);const count=q('#'+countId);if(count)count.textContent=String(Number(count.textContent)+(off?1:-1));window[counter]++;return !off;};
+q('#detail-like').onclick=()=>toggleDetail('detail-like','detail-like-count','detailLikes');
+q('#detail-favorite').onclick=()=>toggleDetail('detail-favorite',null,'detailFavorites');
 q('[data-e2e="follow-button"]').onclick=e=>e.currentTarget.textContent=e.currentTarget.textContent==='关注'?'已关注':'关注';
 // The more-menu only appears while the ellipsis control is hovered. A press on the control
 // itself does nothing on the live page, which is why the reader moves the mouse
@@ -191,7 +247,17 @@ window.toasts=[];
 const recordToast=(text)=>{window.toasts.push(text);toast(text)};
 // 不感兴趣: an action. The page confirms with a toast and moves the feed on; it
 // offers no way to read back whether it applied.
-q('[data-e2e="video-player-no-like"]').onclick=()=>{window.steerClicks++;hideStrip();recordToast('操作成功，将减少此类视频出现')};
+q('[data-e2e="video-player-no-like"]').onclick=()=>{window.steerClicks++;hideStrip();
+// The overlay advances to the next work instead of showing a toast: modal_id
+// changes under the reader. That is the live page's behaviour and the reason a
+// confirmation cannot be read from the toast alone.
+if(window.advanceOnSteer){window.advanceOnSteer=false;
+const nextId='55555'+(window.steerClicks||0);
+history.replaceState({},'','/?modal_id='+nextId);
+q('#player').setAttribute('data-video-id',nextId);
+q('[data-e2e="player-container"]').className='video_'+nextId;
+return;}
+recordToast('操作成功，将减少此类视频出现')};
 // 推荐 is a switch: the label is the state, and the cancel direction announces
 // itself with its own toast.
 q('#video-more-like').parentElement.onclick=()=>{window.steerClicks++;const label=q('#video-more-like');const on=label.textContent==='推荐';label.textContent=on?'取消推荐':'推荐';window.moreState=on;hideStrip();if(!on)recordToast('已取消推荐')};
@@ -217,7 +283,9 @@ card.append(link,title);content.append(card);message.append(content);q('[data-e2
 q('#share').style.display='none';};
 });
 // The live entry is hover-revealed, so mouse-enter opens the panel.
-q('[data-e2e="video-share-icon-container"]').onmouseenter=()=>q('#share').style.display='block';
+// Both share controls open the panel: the live page's rail entry reacts to
+// mouse-enter, and the bottom bar's does the same.
+for(const el of qa('[data-e2e="video-share-icon-container"],[data-e2e="video-player-share"]'))el.onmouseenter=()=>q('#share').style.display='block';
 q('[data-e2e="video-share-icon-container"]').onclick=()=>q('#share').style.display='block';
 // A direct chat renders its counterpart's sec_uid inside conversation props.
 // The shared card's id is not in the DOM; it is in the message record the card
