@@ -969,6 +969,30 @@ export const COMMANDS: CommandSpec[] = [
 			"Read video info first. --value false removes the like; an already matching state does not click the button. Image posts use their own controls and never fall back to the video button.",
 	},
 	{
+		id: "video.steer",
+		description: "Tell the recommender to show less or more of the current work",
+		flags: [
+			{ ...video, required: true },
+			{
+				key: "direction",
+				name: "--direction <less|more>",
+				description: "less marks 不感兴趣; more sets the 推荐 switch",
+				type: "string",
+				required: true,
+			},
+			{
+				key: "enabled",
+				name: "--value <boolean>",
+				description: "For --direction more: the state the switch should end in",
+				type: "boolean-value",
+				default: true,
+			},
+		],
+		effect: "account_write",
+		guidance:
+			"Read video info first and name the work with --video-id; the menu that holds these controls is also rendered on the next slide, and pressing it there acts on a work the caller never named. less is an instruction rather than a switch — the page reports no state for it, so it always presses and one press is one instruction. more is a switch: --value false turns it back off, and asking for the state it already holds does not press. The menu exists on the recommended feed and on the ?modal_id= overlay, so a detail page is reopened in that form first. Confirmation is the page's own toast or the menu's own label; anything else is delivery_uncertain and is never retried automatically.",
+	},
+	{
 		id: "video.favorites",
 		description: "List the works this account has saved, from its own profile tab",
 		flags: [

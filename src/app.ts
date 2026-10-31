@@ -60,6 +60,7 @@ import type { Vocabulary } from "./operations/social.ts";
 import { checkGoalQuota, pauseState } from "./operations/social.ts";
 import { advise, wouldSetStage } from "./operations/social-advice.ts";
 import { sourceCheckout } from "./operations/source.ts";
+import { steerWork } from "./operations/steer.ts";
 import { updateReport } from "./operations/update.ts";
 import { type Input, isWrite, resourceID, validate } from "./operations/validate.ts";
 import { transcribeVoices } from "./operations/voice.ts";
@@ -208,6 +209,16 @@ export class App {
 						timeout: this.timeout,
 					});
 				}
+				// Steering the recommender runs before the generic write path too: it fills
+				// no composer and presses no publish control, so the settlement that path
+				// is built around has nothing to look at. Its own receipt and its own
+				// confirmation are the whole guarantee.
+				if (operation === "video.steer")
+					return steerWork(input, active, {
+						store: this.store,
+						chrome: this.chrome,
+						timeout: this.timeout,
+					});
 				// Recalling is its own path for the same reason deleting is: it has no
 				// composer, no settlement and no confirmation, so the generic write
 				// path would fill an input that does not exist.

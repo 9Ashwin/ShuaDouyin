@@ -95,6 +95,8 @@ export interface Input {
 	per_day?: number;
 	// Ask the platform's own model for a summary alongside the sampled frames.
 	ai?: boolean;
+	// Which way a recommendation steer points: less of this, or more of it.
+	direction?: string;
 }
 
 export function isWrite(operation: string): boolean {
@@ -113,6 +115,11 @@ export function isWrite(operation: string): boolean {
 		"chat.recall",
 		"video.like",
 		"video.favorite",
+		// Steering the recommender is a write: it changes what this account is
+		// shown, passes the pause gate and the goal quota, and leaves a receipt. It
+		// is not a loud write — nobody sees it — but it is an instruction to the
+		// platform about this account, which is exactly what the write gates are for.
+		"video.steer",
 		"user.follow",
 		"live.say",
 		"live.gift",
@@ -233,6 +240,15 @@ export function validate(operation: string, raw: Input): Input {
 			break;
 		case "user.follow":
 			required("user_id");
+			break;
+		case "video.steer":
+			required("video_id");
+			// The direction is the whole instruction, so a missing or misspelled one
+			// fails before Chrome starts instead of defaulting to a side the caller
+			// never asked for. There is no safe default: the two are opposites.
+			if (!["less", "more"].includes(input.direction ?? ""))
+				throw new CliError("invalid_argument", "--direction must be less or more");
+			if (!input.dry_run) required("request_id");
 			break;
 		case "video.observe":
 			input.seconds ??= 3;

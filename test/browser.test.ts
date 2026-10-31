@@ -1687,6 +1687,96 @@ test(
 			await app.execute("video.open", { resource: "https://www.douyin.com/note/70001" }, signal);
 		});
 
+		await t.test("steering less reads the page's own toast, and never claims a state", async () => {
+			// The two controls in this menu are not the same kind of thing. 不感兴趣
+			// is an instruction with no readable result — the strip closes and the
+			// work leaves the feed, and neither says whether it applied. 推荐 is a
+			// switch whose own label is its state. Treating them alike was the bug
+			// that made the first real call report "already in that state".
+			await app.execute("video.open", { resource: "12345" }, signal);
+			await witness?.tab.evaluate(() => {
+				Reflect.set(window, "steerClicks", 0);
+				Reflect.set(window, "toasts", []);
+			});
+			const result = (await app.execute(
+				"video.steer",
+				{ video_id: "12345", direction: "less", request_id: "steer-less-0001" },
+				signal,
+			)) as { confirmed: boolean; changed: boolean; toast: string | null; evidence: string; value: boolean };
+			assert.equal(result.confirmed, true);
+			assert.equal(result.changed, true);
+			assert.equal(result.evidence, "page_toast");
+			assert.match(String(result.toast), /减少此类视频/);
+			// "Less" has no state, so `value` must not pretend to read one.
+			assert.equal(result.value, true);
+			assert.equal(await witness?.tab.evaluate("window.steerClicks"), 1);
+		});
+
+		await t.test("the same steer request replays without pressing again", async () => {
+			// A second press is a second instruction to the platform. A replayed
+			// request id has to answer from the receipt, not from the page.
+			await witness?.tab.evaluate(() => Reflect.set(window, "steerClicks", 0));
+			const replay = (await app.execute(
+				"video.steer",
+				{ video_id: "12345", direction: "less", request_id: "steer-less-0001" },
+				signal,
+			)) as { confirmed: boolean; changed: boolean };
+			assert.equal(replay.confirmed, true);
+			assert.equal(replay.changed, false);
+			assert.equal(await witness?.tab.evaluate("window.steerClicks"), 0);
+		});
+
+		await t.test("the more switch flips both ways and reads its own label", async () => {
+			// On, then off, then on again. Each direction has to be a different
+			// request: asking for "not more" over a receipt for "more" would answer
+			// one instruction with the other.
+			await app.execute("video.open", { resource: "12345" }, signal);
+			const on = (await app.execute(
+				"video.steer",
+				{ video_id: "12345", direction: "more", enabled: true, request_id: "steer-more-0001" },
+				signal,
+			)) as { confirmed: boolean; value: boolean; evidence: string };
+			assert.equal(on.confirmed, true);
+			assert.equal(on.value, true);
+			assert.equal(on.evidence, "menu_label");
+			assert.equal(await witness?.tab.evaluate("window.moreState"), true);
+			const off = (await app.execute(
+				"video.steer",
+				{ video_id: "12345", direction: "more", enabled: false, request_id: "steer-more-0002" },
+				signal,
+			)) as { confirmed: boolean; value: boolean; evidence: string; toast: string | null };
+			assert.equal(off.confirmed, true);
+			assert.equal(off.value, false);
+			// The cancel direction announces itself, so the toast is its evidence.
+			assert.equal(off.evidence, "page_toast");
+			assert.equal(off.toast, "已取消推荐");
+			assert.equal(await witness?.tab.evaluate("window.moreState"), false);
+		});
+
+		await t.test("asking the more switch for the state it already holds does not press", async () => {
+			await app.execute("video.open", { resource: "12345" }, signal);
+			await witness?.tab.evaluate(() => Reflect.set(window, "steerClicks", 0));
+			const same = (await app.execute(
+				"video.steer",
+				{ video_id: "12345", direction: "more", enabled: false, request_id: "steer-more-0003" },
+				signal,
+			)) as { confirmed: boolean; changed: boolean; evidence: string };
+			assert.equal(same.confirmed, true);
+			assert.equal(same.changed, false);
+			assert.equal(same.evidence, "already");
+			assert.equal(await witness?.tab.evaluate("window.steerClicks"), 0);
+		});
+
+		await t.test("a steer refuses a work the page is not showing", async () => {
+			// The menu is laid out for the neighbouring slide too. Naming the work is
+			// what keeps a press from landing on the one behind it.
+			await app.execute("video.open", { resource: "12345" }, signal);
+			await assert.rejects(
+				app.execute("video.steer", { video_id: "67890", direction: "less", request_id: "steer-wrong-0001" }, signal),
+				{ code: "identity_mismatch" },
+			);
+		});
+
 		await t.test("the state marker is read as a whole, not by its suffix", async () => {
 			// Both spellings end the same way: video-player-no-digged and
 			// video-player-is-digged. Matching the suffix called an unliked work

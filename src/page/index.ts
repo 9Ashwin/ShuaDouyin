@@ -98,6 +98,7 @@ import {
 	verifyChatMedia,
 } from "./readers.ts";
 import { openSearchFilters, prepareSearchFilter, searchFilterState } from "./search.ts";
+import { armSteer, cleanupSteer, prepareSteer, steerOpener, steerOutcome } from "./steer.ts";
 
 function checkChatDraft(): void {
 	for (const editor of find(document, '[data-e2e="im-dialog"] [data-e2e="msg-input"] [contenteditable="true"]')) {
@@ -675,6 +676,27 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			return aiEntryPoint();
 		case "ai.summary":
 			return aiSummary();
+		case "steer.opener":
+			return steerOpener();
+		case "steer.prepare":
+			return prepareSteer({
+				token: args.token,
+				video_id: args.video_id,
+				direction: args.direction ?? "",
+				value: args.value,
+			});
+		case "steer.arm":
+			return armSteer({
+				token: args.token,
+				video_id: args.video_id,
+				direction: args.direction ?? "",
+				value: args.value,
+			});
+		case "steer.outcome":
+			return steerOutcome();
+		case "steer.cleanup":
+			cleanupSteer();
+			return {};
 		case "chat.detail.open":
 			// Whether the panel is showing one conversation rather than the list.
 			// The detail view is the only one with a message list. data-e2e="chat-page"

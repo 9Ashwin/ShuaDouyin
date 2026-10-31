@@ -93,6 +93,7 @@ The artwork uses Chinese labels. The character represents a configurable Agent, 
 | Search works and people; browse a batch of feed items | `dy search` · `dy user search` · `dy feed sweep` |
 | Read works, sample frames, inspect comments and replies | `dy video digest` · `dy comment list` · `dy comment replies` |
 | Like, favorite, follow, post text or image comments | `dy video like` · `dy video favorite` · `dy user follow` · `dy comment post` · `dy comment image` |
+| Steer the recommender: less of this kind, more of it | `dy video steer --direction less` · `dy video steer --direction more` |
 | Read messages, send text and images, quote a reply | `dy chat read` · `dy chat send` · `dy chat image` · `dy chat reply` |
 | Share a work as a link or native card | `dy chat share` · `dy chat forward` |
 | Read live-room info and chat, speak, send a named and priced gift | `dy live info` · `dy live chat` · `dy live say` · `dy live gift` |

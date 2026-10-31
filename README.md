@@ -93,6 +93,7 @@ dy auth login
 | 搜索作品、找人、批量浏览推荐流 | `dy search` · `dy user search` · `dy feed sweep` |
 | 读取作品、采样画面、查看评论与回复 | `dy video digest` · `dy comment list` · `dy comment replies` |
 | 点赞、收藏、关注、发布文字或图片评论 | `dy video like` · `dy video favorite` · `dy user follow` · `dy comment post` · `dy comment image` |
+| 调整推荐方向：某类少来、某类多来 | `dy video steer --direction less` · `dy video steer --direction more` |
 | 读取私信、发送文字和图片、引用回复 | `dy chat read` · `dy chat send` · `dy chat image` · `dy chat reply` |
 | 分享作品链接或原生卡片 | `dy chat share` · `dy chat forward` |
 | 读取直播信息与弹幕、发言、按名称和价格送礼 | `dy live info` · `dy live chat` · `dy live say` · `dy live gift` |

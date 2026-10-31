@@ -11,6 +11,20 @@ export const fixture = `<!doctype html>
 <div data-e2e="video-player-digg" data-e2e-state="video-player-no-digged">点赞</div>
 <button data-e2e="video-player-collect" aria-pressed="false">收藏</button>
 <button data-e2e="video-player-comment">评论</button>
+<!-- The more-menu, in the shape the live feed renders it: one strip of five items,
+     of which only 不感兴趣, 举报 and 快捷键列表 carry a marker. 推荐 has an empty
+     data-e2e and is the only item identified by its own label, and that label is
+     also its state (推荐 / 取消推荐). The strip is hidden until the ellipsis control is
+     hovered, exactly as it is live. -->
+<div data-e2e="video-play-more" id="video-more">...</div>
+<div class="hfLkYyqX" id="video-more-strip" style="display:none">
+<div class="r5aqUxRL"><div class="Au3ppGJ6"><svg width="27" height="27" viewBox="0 0 27 27"><path d="M4 4h20v20H4z"></path></svg></div><div class="CtbumKit" id="video-more-like">推荐</div></div>
+<div class="r5aqUxRL" data-e2e=""><div class="Au3ppGJ6"></div><div class="CtbumKit">上热门</div></div>
+<div class="r5aqUxRL" data-e2e="video-player-no-like"><div class="Au3ppGJ6"></div><div class="CtbumKit">不感兴趣</div></div>
+<div class="r5aqUxRL" data-e2e="video-player-report"><div class="Au3ppGJ6"></div><div class="CtbumKit">举报</div></div>
+<div class="r5aqUxRL" data-e2e="video-player-shoret-cut"><div class="Au3ppGJ6"></div><div class="CtbumKit">快捷键列表</div></div>
+</div>
+<div data-e2e="toast" id="video-toast" style="display:none"></div>
 </section>
 <!-- The feed arrows live beside the slides, not inside one, so they stay
      clickable on a live slide the way they do on the real page. -->
@@ -165,6 +179,22 @@ row.append(content);q('[data-e2e="message-list"]').append(row);panel.remove();};
 panel.append(item);});
 document.body.append(panel);});
 q('[data-e2e="follow-button"]').onclick=e=>e.currentTarget.textContent=e.currentTarget.textContent==='关注'?'已关注':'关注';
+// The more-menu only appears while the ellipsis control is hovered. A press on the control
+// itself does nothing on the live page, which is why the reader moves the mouse
+// rather than clicking it.
+window.steerClicks=0;window.moreState=false;
+const showStrip=()=>q('#video-more-strip').style.display='block';
+q('#video-more').onmouseenter=showStrip;
+const hideStrip=()=>q('#video-more-strip').style.display='none';
+const toast=(text)=>{const el=q('#video-toast');el.textContent=text;el.style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>{el.style.display='none';el.textContent=''},3000)};
+window.toasts=[];
+const recordToast=(text)=>{window.toasts.push(text);toast(text)};
+// 不感兴趣: an action. The page confirms with a toast and moves the feed on; it
+// offers no way to read back whether it applied.
+q('[data-e2e="video-player-no-like"]').onclick=()=>{window.steerClicks++;hideStrip();recordToast('操作成功，将减少此类视频出现')};
+// 推荐 is a switch: the label is the state, and the cancel direction announces
+// itself with its own toast.
+q('#video-more-like').parentElement.onclick=()=>{window.steerClicks++;const label=q('#video-more-like');const on=label.textContent==='推荐';label.textContent=on?'取消推荐':'推荐';window.moreState=on;hideStrip();if(!on)recordToast('已取消推荐')};
 // The live share panel carries the recipient's account identity in React props
 // (user.sec_uid) next to the send button's numeric data-userid. The fixture
 // renders the same shape so the reader is exercised as-is, and records which

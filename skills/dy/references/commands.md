@@ -133,11 +133,20 @@ dy video audio --seconds 10 --output a.webm
 ```bash
 dy video like --value true|false
 dy video favorite --video-id <id> --value true|false   # 收藏/取消
- dy video favorites                              # 读自己的收藏列表（--tab 可换 喜欢/观看历史/稍后再看）
+dy video favorites                              # 读自己的收藏列表（--tab 可换 喜欢/观看历史/稍后再看）
 dy user follow --value true|false
+dy video steer --direction less                 # 不感兴趣，让这类内容少来
+dy video steer --direction more --value true    # 推荐，让这类内容多来
 ```
 
-这三个都是**设置目标状态**，不是切换。命令会核实新状态真的被观察到才报成功。传 `--value false` 取消。
+点赞、收藏、关注都是**设置目标状态**，不是切换。命令会核实新状态真的被观察到才报成功。传 `--value false` 取消。
+
+`video steer` 改的是推荐方向，不是别人能看见的东西。两个方向不对称：
+
+- `less` 是**一次指令，不是开关**。页面没有任何地方能读出「这条已经标过不感兴趣了」，所以它每次都点，答案只有页面自己的 toast。**别为了确认再点一次——第二次就是第二次指令。**
+- `more` 是**真开关**，按钮文字就是它的状态（`推荐` / `取消推荐`）。所以它有 `--value false`，能自己关掉；已经是目标状态就不点。
+
+它们只在推荐流和 `?modal_id=` 浮层里有。详情页上命令会自己切过去。
 
 `user.follow` 作用于当前打开的用户主页，所以先 `dy user get <id-or-url>`。
 
