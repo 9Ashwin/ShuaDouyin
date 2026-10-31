@@ -63,6 +63,40 @@ test("a work recorded twice still counts once", async (t) => {
 	assert.equal(summary?.watched, 1);
 });
 
+test("a sweep's works count toward the round without a manual mark", async (t) => {
+	// The bug this covers: a caller swept twenty works, the round reported zero,
+	// and the budget never approached because only `browse watch` counted.
+	const base = await setup(t, "sweep-counts");
+	const store = new Store(base);
+	const round = (await startRound(store, { works: 2 })) as { id: string };
+	await store.append("feed.sweep", {
+		works: [
+			{ id: "7000000000000000001", title: "甲" },
+			{ id: "7000000000000000002", title: "乙" },
+		],
+		stopped: "count_reached",
+	});
+	const summary = roundSummary(await store.events(), round.id);
+	assert.equal(summary?.watched, 0, "nothing was explicitly watched");
+	assert.equal(summary?.examined, 2, "but two works were seen");
+	assert.equal(summary?.scanned, 2);
+	assert.equal(summary?.inspected, 0);
+	// The budget is about works examined, so it is now spent.
+	assert.equal(summary?.over_budget, true);
+});
+
+test("reading a swept work properly counts once and as an inspect", async (t) => {
+	const base = await setup(t, "sweep-then-digest");
+	const store = new Store(base);
+	const round = (await startRound(store, {})) as { id: string };
+	await store.append("feed.sweep", { works: [{ id: "7000000000000000001" }, { id: "7000000000000000002" }] });
+	await store.append("video.digest", { video_id: "7000000000000000001" });
+	const summary = roundSummary(await store.events(), round.id);
+	assert.equal(summary?.examined, 2, "the same work twice is one work");
+	assert.equal(summary?.inspected, 1);
+	assert.equal(summary?.scanned, 1);
+});
+
 test("a skip without a known reason is refused", async (t) => {
 	const base = await setup(t, "badreason");
 	const store = new Store(base);

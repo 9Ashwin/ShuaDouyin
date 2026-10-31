@@ -6,6 +6,7 @@ import { Knowledge, knowledgeOperation, validateKnowledge } from "./knowledge.ts
 import type { Memory } from "./memory/concept.ts";
 import { migrateLegacyLayout } from "./migrate.ts";
 import { askDouyin } from "./operations/ai-search.ts";
+import { rounds } from "./operations/browsing.ts";
 import { audio, capture, noteImage, noteSlide, observe } from "./operations/capture.ts";
 import { captureChatImage, listChats, readChat } from "./operations/chat.ts";
 import { compareChatWindows } from "./operations/chat-diff.ts";
@@ -286,7 +287,17 @@ export class App {
 							previous_context: previous,
 						};
 					}
-					if (!["status", "auth.status"].includes(operation)) await this.store.append(operation, result);
+					if (!["status", "auth.status"].includes(operation)) {
+						// The round is resolved now, while the lock is held and the call is
+						// starting. Reading "the open round" after the fact would attach a
+						// long sweep to whichever round happened to be open when it ended.
+						const open = rounds(await this.store.events()).find((round) => round.status === "open");
+						const data =
+							open && result && typeof result === "object"
+								? { ...(result as object), _browse: { round_id: open.id, started_at: open.started_at } }
+								: result;
+						await this.store.append(operation, data);
+					}
 					return setup && result && typeof result === "object" ? { ...result, setup } : result;
 				} catch (error) {
 					// Cancellation is the caller's choice and its outcome is not a

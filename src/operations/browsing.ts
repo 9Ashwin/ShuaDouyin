@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { CliError } from "../errors.ts";
 import type { Event, Store } from "../store.ts";
+import { observations, uniqueObservations } from "./observations.ts";
 
 // A browsing round is one stretch of looking. The CLI records its boundary and
 // what happened inside it so that "how much did it watch, what did it skip, why
@@ -113,6 +114,10 @@ export function roundSummary(events: Event[], id: string) {
 	const watched = new Map<string, string>();
 	const skipped: { works: string; reason: string }[] = [];
 	const interacted = new Set<string>();
+	// What the commands actually returned. Before this, only explicit
+	// `browse watch` marks counted, so a sweep of twenty works left the round
+	// reporting zero and the budget never approached.
+	const seen = uniqueObservations(observations(inside));
 	for (const event of inside) {
 		const data = record(event);
 		// Both browse events name the work as `id`; writes name it as `video_id`.
@@ -131,7 +136,17 @@ export function roundSummary(events: Event[], id: string) {
 	const unique = [...watched.keys()];
 	// A budget counts works looked at, and a skipped one was still looked at.
 	// Counting only the kept ones would let a round run forever by skipping.
-	const examined = new Set([...unique, ...skipped.map((entry) => entry.works)]);
+	//
+	// Examined is the union of three sources, and they mean different things:
+	// works the caller explicitly watched, works it explicitly skipped, and works
+	// a command returned. Only the third is new, and it is the one that makes a
+	// sweep count at all. `watched` keeps its hand-marked meaning: a scan does not
+	// become a watch just because the work passed by.
+	const examined = new Set([...unique, ...skipped.map((entry) => entry.works), ...seen.map((entry) => entry.entity)]);
+	// Deep reads are the expensive ones and are reported apart from scans, so a
+	// caller can see how much of the budget went to looking closely.
+	const inspected = seen.filter((entry) => entry.depth === "inspect").length;
+	const scanned = seen.filter((entry) => entry.depth === "scan").length;
 	// A budget is advisory: reaching it is reported, but the CLI does not close
 	// the round or refuse the next work. The caller decides.
 	const overBudget = examined.size >= round.budget.works || elapsed >= round.budget.minutes * 60_000;
@@ -140,6 +155,10 @@ export function roundSummary(events: Event[], id: string) {
 		status: round.status,
 		watched: unique.length,
 		skipped: skipped.length,
+		// Works a command returned, from the log rather than from a hand mark.
+		examined: examined.size,
+		scanned,
+		inspected,
 		interacted: [...interacted].length,
 		elapsed_ms: elapsed,
 		budget: round.budget,
