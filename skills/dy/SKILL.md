@@ -14,26 +14,11 @@ allowed-tools: Bash(dy:*) Bash(npx dy:*)
 
 ## 第一次用：先问人设
 
-新工作区里人格还是模板。这时候每个页面命令的返回里都会带一个 `setup` 字段：
+新工作区里人格还是模板。每个页面命令的返回会带一个 `setup` 字段，里面有两个问题：**这个 bot 叫什么、说话什么调子**；**有什么事它绝对不能做**。
 
-```json
-"setup": {
-  "status": "pending",
-  "ask": ["这个 bot 叫什么，说话什么调子？", "有什么事它绝对不能做？"],
-  "next": "…怎么保存人格…",
-  "why": "不回答的话，bot 会用通用助手的声音说话，而输出里没有任何东西会提示主人没被问过"
-}
-```
+**命令照常执行**，`setup` 只是搭在结果上，不拦人。看到它就先问主人，别等主人自己想起来。问完：`dy workspace get AGENTS.md` 拿 revision → 改完 `dy workspace set AGENTS.md --text-file <file> --if-match <revision>` → `dy onboarding complete`。主人说「以后再说」就跑 `dy onboarding skip`——跳过也是回答。
 
-**命令照常执行**，`setup` 只是搭在结果上。看到它就先问主人这两个问题，别等主人自己想起来。
-
-1. `dy workspace get AGENTS.md` 拿 revision
-2. 改完 `dy workspace set AGENTS.md --text-file <file> --if-match <revision>`
-3. `dy onboarding complete`
-
-主人说「以后再说」就跑 `dy onboarding skip`——跳过也是回答，之后不再提示。
-
-`setup` 只在新工作区出现。它没有拦你，是因为拦过一版：想先看几条视频再起名的人会被错误挡住，那比提示更糟。
+它没有拦你是有原因的：拦过一版，想先看几条视频再起名的人会被错误挡住，那比提示更糟。
 
 ## 先确认 dy 装好了
 
@@ -58,48 +43,20 @@ dy context show --query "<这一轮要做什么>"
 
 ```bash
 dy init                      # 首次：建工作区并开始引导
-dy onboarding show           # 读引导状态（pending 时先问用户）
 dy workspace get AGENTS.md   # 读人格
 dy context show --query "…"  # 召回相关记忆
-dy feed next                 # 刷下一条
-dy video info                # 读当前作品
+dy feed sweep --count 8      # 一次读一批，比逐条 feed next 省调用
+dy video digest              # 标题 + 采样画面 + 评论摘要
 ```
 
 每一轮对话或任务开始，用 `context show --query <当前问题>` 召回相关记忆；`memory search` 做精确关键词查询。按需加 `--profile-ref` 只看某个人物的上下文。
 
 ## 命令
 
-日常这一组就够。参数细节、每个命令的坑、各场景的完整流程都在 `dy guide`。
+**不在这里列全。** `dy guide` 打印完整说明，内容和你的 `dy` 版本一致；`dy schema` 列出全部命令和参数。下面只记两条会出事的：
 
-```bash
-# 刷与看
-dy feed sweep --count 8         # 一次读一批：id/作者/标题/时长，首选
-dy feed next / previous
-dy video digest                 # 标题 + 采样画面 + 评论摘要；图集会逐页拍
-dy video open <id-or-url>
-
-# 评论
-dy comment list --limit 20      # 每条带 stance 和 likes
-dy comment post --video-id <id> --text "…" --request-id <唯一ID>
-dy comment reply --video-id <id> --comment-id <id> --text "…" --request-id <唯一ID>
-dy comment delete --comment-id <id> --confirm
-dy comment voice                # 这个区的写法：中位长度、标点、称呼
-dy voice check --text "…"       # 发之前自查像不像机器写的
-
-# 私信与关系
-dy chat list / read / send
-dy person read <id>             # 这个人发过什么、写过什么
-dy social response --conversation-id <id>   # 我发的有没有人回
-dy social advise <person> --conversation-id <id>  # 继续、等、还是停
-
-# 其他
-dy live info / chat / say
-dy memory add / search
-dy context show --query "…"
-dy ai ask --query "…"           # 问平台自己的 AI，当线索用
-```
-
-**写入必须有 `--request-id`。** 加 `--progress` 看每步走到哪，`dispatching` 之后不可逆。
+- **写入必须有 `--request-id`。** 加 `--progress` 看每步走到哪，`dispatching` 之后不可逆。
+- **发评论前跑 `dy voice check --text "…"`**，它会指出像不像稿子；这个区该怎么写用 `dy comment voice` 量。
 
 ## 按任务读参考
 
