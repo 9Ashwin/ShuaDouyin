@@ -645,6 +645,13 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 				index,
 			};
 		}
+		case "chat.detail.open":
+			// Whether the panel is showing one conversation rather than the list.
+			// The detail view is the only one with a message list. data-e2e="chat-page"
+			// is not it: the private chat panel renders no such marker, so checking
+			// that reported "on the list" while a conversation covered it — and the
+			// next click landed on a message bubble instead of a row.
+			return findRendered(document, '[class*="messageMessageListlist"],[data-e2e="message-list"]').length > 0;
 		case "chat.recall.target":
 			return messageTarget(args.message_id ?? "");
 		case "chat.recall.point":

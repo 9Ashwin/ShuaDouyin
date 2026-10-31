@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import type { Session } from "../browser.ts";
-import { control, selectChat } from "./navigation.ts";
+import { control } from "./navigation.ts";
 import type { Input } from "./validate.ts";
 
 // What arrived while nobody was looking.
@@ -81,10 +83,30 @@ export async function readInbox(session: Session, input: Input, signal: AbortSig
 	for (const contact of awaiting) {
 		signal.throwIfAborted();
 		if (!contact.id) continue;
-		// Selecting the conversation is what makes its rows readable. selectChat
-		// handles the case this loop creates — the previous conversation's detail
-		// view covers the list — by going back first.
-		await selectChat(session, contact.id, signal);
+		// Selecting the conversation is what makes its rows readable. The detail
+		// view from the previous iteration covers the list, so each round starts by
+		// returning to the list — via the close button, which exists on both views,
+		// rather than the back control, which exists only on the detail view and
+		// made this fail on the first iteration.
+		const onDetail = await session.call<boolean>("chat.detail.open", {});
+		if (onDetail) {
+			await control(session, "chat.back").catch(() => undefined);
+			await delay(200, undefined, { signal });
+		}
+		// The list slides back in over about a third of a second, and point() probes
+		// for a hit-testable row in a synchronous loop — inside one evaluate call it
+		// cannot see the animation finish, so it reports the row as covered. Waiting
+		// here is what makes the measurement land after the motion.
+		await delay(350, undefined, { signal });
+		const point = await session.call<{ x: number; y: number; selector?: string }>("chat.select", {
+			conversation_id: contact.id,
+			// A fresh token per attempt. A fixed one collided with the guard left by the
+			// previous run: the attribute no longer matched the re-rendered row and the
+			// guard cancelled the press, which surfaced as "something is covering it".
+			token: randomUUID(),
+		});
+		await session.click(point);
+		await delay(300, undefined, { signal });
 		const conversation = await session.call<{ messages: Message[] }>("chat.read", {
 			conversation_id: contact.id,
 			limit: 20,
@@ -125,12 +147,21 @@ export async function readInbox(session: Session, input: Input, signal: AbortSig
 	// Opening a conversation to read it marks it read on the platform. Saying so
 	// is the difference between "the inbox is empty" and "this command cleared it".
 	//
-	// The panel is closed on the way out, and this is not cosmetic: it is left on
-	// the last conversation's detail view, which covers the list. The next command
-	// to click a row — a reply, another inbox run — then fails with "not clickable
-	// because something is covering it", which reads like a broken selector and is
-	// not. Closing restores the state a caller expects to find.
-	await control(session, "chat.close").catch(() => undefined);
+	// Leave the panel on the conversation list, not on the last detail view and
+	// not closed.
+	//
+	// Both of the obvious choices are wrong, and each was tried. Leaving it on a
+	// detail view covers the list, so the next command to click a row fails with
+	// "not clickable because something is covering it". Closing it entirely makes
+	// `chat send` fail with "expected one conversation with the requested ID,
+	// found 0" — it does not open the panel itself. Going back to the list is the
+	// one state where a following command works without the caller knowing what
+	// this one did.
+	// Only a open conversation has a back control; on the list there is nothing to
+	// go back from, and asking for it fails. The page states which view it is on
+	// by whether a chat container is rendered.
+	const onDetail = await session.call<boolean>("chat.detail.open", {});
+	if (onDetail) await control(session, "chat.back").catch(() => undefined);
 	return {
 		observed_at: new Date().toISOString(),
 		conversations,
