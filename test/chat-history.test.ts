@@ -68,6 +68,17 @@ test("history preserves anonymous windows, keeps one identity and paginates a st
 	assert.ok(repeated?.sources.includes(`event:default:${first.id}`));
 	assert.equal(JSON.stringify(result).includes("OTHER-IDENTITY-PRIVATE"), false);
 	assert.equal(JSON.stringify(result).includes("OTHER-CONVERSATION"), false);
+	// A known message is reported by identity. Returning its content again made
+	// this reply four times larger than the messages it was answering with, and
+	// the event ids were the largest part of what remained. The counts and the
+	// seen window answer "how often and when"; the text was already returned the
+	// first time the message was read.
+	const known = (result.known_messages as unknown as Record<string, unknown>[])[0];
+	assert.ok(known, "a known message is reported");
+	assert.equal(known.text, undefined);
+	assert.equal(known.sources, undefined);
+	assert.equal(typeof known.observations, "number");
+	assert.equal(typeof known.first_seen, "string");
 	const page = (await app.execute("chat.history", { conversation_id: conv, limit: 1 })) as {
 		revision: string;
 		next_offset: number;

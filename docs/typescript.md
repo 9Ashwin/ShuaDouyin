@@ -92,9 +92,14 @@ two apart rather than converting in both directions.
   `validate`, `decode`, `derive`, `responseWindow` — are pure and take their
   inputs as arguments, which is why they can be tested without a browser or a
   store. Keep new logic that way and the test is a function call.
-- **Failures are typed.** Throw `CliError` with a code from the fixed list.
-  Never throw a bare `Error` for something a caller is expected to handle, and
-  never swallow one — `catch {}` is for cleanup only.
+- **Failures are typed.** Throw `CliError` with a code from the fixed list for
+  anything a caller is expected to handle. A bare `Error` is for an invariant
+  break inside one function, and it is caught before it leaves.
+- **A `catch` that does not rethrow must say why it is safe.** There are about a
+  hundred of them and nearly all are probing (`does this file exist`,
+  `does this DOM node have a getter`) or cleanup. An empty `catch {}` with no
+  comment is the one to question in review: either it is a probe and should say
+  so, or it is hiding a failure.
 - **No new dependency without a reason.** Direct dependencies are exact
   versions. A package that saves twenty lines usually costs more than twenty
   lines of review surface.
@@ -116,8 +121,10 @@ Comments explain **why**. The code says what.
 
 Drawn from what has actually gone wrong here, not from a generic list.
 
-- **Do not put DOM knowledge outside `src/page/`.** If `src/operations/` knows a
-  selector, the adapter is missing an operation.
+- **Do not read page data outside `src/page/`.** The adapter is the only code
+  that parses the DOM. `src/operations/` may use a Playwright locator to wait for
+  or click a control — that is driving the browser, not reading the page — but a
+  `page.evaluate` that inspects elements belongs in the adapter as an operation.
 - **Do not read a React record by own properties alone.** Conversation fields
   live on the prototype and get renamed between builds. `own()`, `inherited()`
   and `getterValue()` exist for this.

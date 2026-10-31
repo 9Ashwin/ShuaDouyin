@@ -160,14 +160,22 @@ export function chatHistory(
 	const selectedKnown = [...known.values()]
 		.slice(-Math.min(limit * 10, 100))
 		.reverse()
+		// A previously seen message is reported by identity, not by content: the
+		// content was already returned the first time this message was read, and
+		// repeating it here made `chat read` four times larger than the messages it
+		// was answering with. What a caller needs from this list is which ids it has
+		// seen before and how often each changed — the text is the same text.
 		.map((item) => ({
-			...bounded(item.row),
+			id: item.row.id,
+			direction: item.row.direction,
 			first_seen: item.first_seen,
 			last_seen: item.last_seen,
 			observations: item.observations,
 			observed_fields_changed: item.versions.size > 1,
-			sources: item.sources,
-			sources_truncated: item.observations > item.sources.length,
+			// Which events saw this message is not repeated here. `observations` and
+			// the first/last seen span answer the question a reader actually has —
+			// how often, over what window — and the event ids cost more than
+			// everything else in this list combined. `dy history` still has them.
 		}));
 	return {
 		conversation_id: conversationID,
