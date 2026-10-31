@@ -16,6 +16,8 @@ import {
 	endRound,
 	noteSkipped,
 	noteWatched,
+	recordCheckpoint,
+	roundRevision,
 	roundSummary,
 	rounds,
 	startRound,
@@ -208,6 +210,17 @@ export class Knowledge {
 						},
 					});
 				});
+			case "browse.checkpoint":
+				return this.workspaces.lock(async () => {
+					const raw = input.text?.trim() || (input.text_file ? await readFile(input.text_file, "utf8") : "");
+					if (!raw) throw new CliError("invalid_argument", "Supply the batch with --text-file or --text");
+					return recordCheckpoint(
+						new Store(this.workspaces.base),
+						input.resource ?? "",
+						JSON.parse(raw) as unknown,
+						input.if_match,
+					);
+				});
 			case "browse.end":
 				return this.workspaces.lock(() =>
 					endRound(new Store(this.workspaces.base), input.resource ?? "", input.reason ?? ""),
@@ -224,9 +237,13 @@ export class Knowledge {
 				return this.workspaces.lock(async () => {
 					const store = new Store(this.workspaces.base);
 					const events = await store.events();
-					return input.resource
-						? (roundSummary(events, input.resource) ?? { round_id: input.resource, known: false })
-						: { rounds: rounds(events).slice(-(input.limit ?? 10)) };
+					if (!input.resource) return { rounds: rounds(events).slice(-(input.limit ?? 10)) };
+					const summary = roundSummary(events, input.resource);
+					if (!summary) return { round_id: input.resource, known: false };
+					// The revision is what a checkpoint's --if-match names. It covers the
+					// plan and every checkpoint written so far, so a batch prepared
+					// against this view is refused if another one landed in between.
+					return { ...summary, revision: roundRevision(events, input.resource) };
 				});
 			case "context.browsing":
 				return this.workspaces.lock(async () =>

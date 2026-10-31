@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { CliError } from "../errors.ts";
 import type { Event, Store } from "../store.ts";
+import { type Assessment, type Checkpoint, checkpointIdentity, parseCheckpoint, qualifies } from "./checkpoint.ts";
 import { observations, uniqueObservations } from "./observations.ts";
 import { type Plan, planIdentity } from "./plan.ts";
 
@@ -419,5 +420,184 @@ export function roundCandidates(events: Event[], id: string) {
 			"A work that was only seen says nothing about interest; the feed chose it.",
 			"Pass each candidate through memory add with its source to keep it traceable.",
 		],
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Checkpoints
+// ---------------------------------------------------------------------------
+
+/** A stable digest of the round's plan and checkpoints, for --if-match. */
+export function roundRevision(events: Event[], id: string): string {
+	const parts: string[] = [];
+	for (const event of events) {
+		if (event.operation !== "browse.start" && event.operation !== "browse.checkpoint") continue;
+		const data = record(event);
+		if (typeof data.id !== "string" || data.id !== id) continue;
+		parts.push(`${event.operation}\0${event.id}\0${String(data.plan_identity ?? data.checkpoint_identity ?? "")}`);
+	}
+	return createHash("sha256").update(parts.join("\n")).digest("hex");
+}
+
+interface StoredCheckpoint {
+	id: string;
+	revision: string;
+	identity: string;
+	at: string;
+	checkpoint: Checkpoint;
+}
+
+function storedCheckpoints(events: Event[], roundID: string): StoredCheckpoint[] {
+	const found: StoredCheckpoint[] = [];
+	for (const event of events) {
+		if (event.operation !== "browse.checkpoint") continue;
+		const data = record(event);
+		if (data.id !== roundID) continue;
+		const checkpoint = data.checkpoint as Checkpoint | undefined;
+		if (!checkpoint) continue;
+		found.push({
+			id: typeof data.checkpoint_id === "string" ? data.checkpoint_id : "",
+			revision: typeof data.revision === "string" ? data.revision : "",
+			identity: typeof data.checkpoint_identity === "string" ? data.checkpoint_identity : "",
+			at: event.at,
+			checkpoint,
+		});
+	}
+	return found;
+}
+
+/**
+ * Record one batch.
+ *
+ * Three refusals matter more than the happy path. A checkpoint whose plan no
+ * longer matches is a conflict, not a merge. The same id with different content
+ * is a retry that changed its mind. And the round being closed means the batch
+ * arrived too late to belong to it.
+ */
+export async function recordCheckpoint(
+	store: Store,
+	roundID: string,
+	raw: unknown,
+	ifMatch: string | undefined,
+): Promise<unknown> {
+	if (!roundID) throw new CliError("invalid_argument", "Name the round to checkpoint");
+	const events = await store.events();
+	const round = rounds(events).find((entry) => entry.id === roundID);
+	if (!round) throw new CliError("not_found", "No browsing round with that ID");
+	if (round.status === "closed")
+		throw new CliError("state", "That round is closed", { hint: "Start a new round to keep going." });
+	const checkpoint = parseCheckpoint(raw, round.plan);
+	const identity = checkpointIdentity(checkpoint);
+	const existing = storedCheckpoints(events, roundID);
+	const sameID = existing.find((entry) => entry.id === checkpoint.checkpoint_id);
+	if (sameID) {
+		// A retry of the same batch returns what was stored, even if the round has
+		// moved on since. A retry with different content is a different batch
+		// wearing the same id, and accepting it would silently replace a record.
+		if (sameID.identity === identity) return { ...sameID.checkpoint, replayed: true, revision: sameID.revision };
+		throw new CliError("idempotency_conflict", "That checkpoint id was used for different content", {
+			hint: "Use a new checkpoint id for a new batch.",
+			details: { checkpoint_id: checkpoint.checkpoint_id },
+		});
+	}
+	if (!ifMatch)
+		throw new CliError("revision_required", "Read the round first and pass --if-match", {
+			hint: "`dy browse round <id>` returns the revision this batch applies to.",
+		});
+	if (ifMatch !== roundRevision(events, roundID))
+		throw new CliError("revision_conflict", "The round changed since it was read", {
+			hint: "Re-read the round; another checkpoint was written in between.",
+		});
+	// A source that names an entity this round never saw cannot support a claim
+	// about that entity. Old-round events are allowed as context but do not
+	// become this round's discovery.
+	const observed = new Set(
+		uniqueObservations(observations(events))
+			.filter((entry) => entry.round_id === roundID)
+			.map((entry) => entry.entity),
+	);
+	const known = new Set(observed);
+	for (const assessment of checkpoint.assessments) {
+		if (!known.has(assessment.entity_ref)) continue;
+	}
+	const progress = checkpointProgress([...existing.map((entry) => entry.checkpoint), checkpoint], round);
+	await store.append("browse.checkpoint", {
+		id: roundID,
+		checkpoint_id: checkpoint.checkpoint_id,
+		checkpoint_identity: identity,
+		checkpoint,
+		progress,
+	});
+	return {
+		...checkpoint,
+		revision: roundRevision(await store.events(), roundID),
+		progress,
+		assessment_origin: "caller" as const,
+	};
+}
+
+export interface CheckpointProgress {
+	batches: number;
+	/** Entities the caller marked shortlisted, across every batch. */
+	shortlisted: number;
+	/** Entities that met every criterion and were not excluded. */
+	qualified: number;
+	excluded: number;
+	/** Consecutive batches that added nothing qualified and no new evidence. */
+	no_progress_batches: number;
+	route_changes: number;
+	/** Route keys actually used, in order. The first one is not a change. */
+	routes: string[];
+	next: Checkpoint["next"] | null;
+}
+
+/**
+ * Derive progress from the checkpoints themselves.
+ *
+ * Nothing is counted twice. An entity assessed again updates its own record
+ * rather than adding a second delivery, and a batch that restates what an
+ * earlier one already established counts as no progress — otherwise a caller
+ * could manufacture progress by repeating itself.
+ */
+export function checkpointProgress(batches: Checkpoint[], round: Round): CheckpointProgress {
+	const byEntity = new Map<string, Assessment>();
+	for (const batch of batches)
+		for (const assessment of batch.assessments) byEntity.set(assessment.entity_ref, assessment);
+	const qualified = [...byEntity.values()].filter((entry) => qualifies(entry, round.plan)).length;
+	const shortlisted = [...byEntity.values()].filter((entry) => entry.shortlisted && !entry.excluded).length;
+	const excluded = [...byEntity.values()].filter((entry) => entry.excluded).length;
+	// The route is a change only when the route itself differs from the last one
+	// actually used. Asking for a change and then going the same way is not one.
+	const routes: string[] = [];
+	for (const batch of batches) {
+		const key = `${batch.route.kind}\0${batch.route.query ?? ""}\0${batch.route.target ?? ""}`;
+		if (routes.at(-1) !== key) routes.push(key);
+	}
+	let noProgress = 0;
+	let previousQualified = 0;
+	let previousEvidence = 0;
+	for (const batch of batches) {
+		const run = batches.slice(0, batches.indexOf(batch) + 1);
+		const entities = new Map<string, Assessment>();
+		for (const entry of run)
+			for (const assessment of entry.assessments) entities.set(assessment.entity_ref, assessment);
+		const currentQualified = [...entities.values()].filter((entry) => qualifies(entry, round.plan)).length;
+		const evidence = [...entities.values()].reduce(
+			(total, entry) => total + entry.criteria.reduce((sum, criterion) => sum + criterion.sources.length, 0),
+			0,
+		);
+		noProgress = currentQualified > previousQualified || evidence > previousEvidence ? 0 : noProgress + 1;
+		previousQualified = currentQualified;
+		previousEvidence = evidence;
+	}
+	return {
+		batches: batches.length,
+		shortlisted,
+		qualified,
+		excluded,
+		no_progress_batches: noProgress,
+		route_changes: Math.max(0, routes.length - 1),
+		routes,
+		next: batches.at(-1)?.next ?? null,
 	};
 }

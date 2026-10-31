@@ -527,6 +527,24 @@ export const COMMANDS: CommandSpec[] = [
 			"A round left open by a session that died is resumed, not duplicated: two open rounds would each claim a budget and neither would be true. A plan states what this round delivers, which criteria a candidate must meet and what to do when progress stops; it is validated whole before anything is stored and cannot be changed afterwards, so a different plan needs a closed round first. Resuming with a different plan, or with a budget flag that disagrees with the open round, returns revision_conflict rather than merging the two. The budget is advisory — browse round says it is spent, and the caller decides to close.",
 	},
 	{
+		id: "browse.checkpoint",
+		description: "Record what one batch found, what it ruled out, and where it goes next",
+		argument: { key: "resource", name: "round-id", description: "Round ID from browse start" },
+		flags: [
+			{ key: "text_file", name: "--text-file <path>", description: "Checkpoint JSON", type: "string" },
+			{ key: "text", name: "--text <json>", description: "The same checkpoint inline", type: "string" },
+			{
+				key: "if_match",
+				name: "--if-match <revision>",
+				description: "Revision from browse round",
+				type: "string",
+			},
+		],
+		effect: "local",
+		guidance:
+			"One batch is written as a whole or not at all. Each criterion must be supported, not_supported or unknown, and supported or not_supported must cite an event that exists and belongs to an entity in this round; unknown is how a missing answer is recorded. A criterion the plan does not have is refused, because evidence for an unasked question is not evidence. The same checkpoint id with the same content returns the stored result; the same id with different content is idempotency_conflict. Progress is derived from these checkpoints, so a batch that repeats what an earlier one already established does not count as new. This records the caller's assessment; it cannot and does not verify whether the conclusion is true.",
+	},
+	{
 		id: "browse.end",
 		description: "Close a browsing round and keep its summary",
 		argument: { key: "resource", name: "round-id", description: "Round ID from browse start" },

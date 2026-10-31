@@ -322,13 +322,20 @@ dy live gift --name 人气票 --price 1 --request-id <id>
 把一次浏览收成一束证据，而不是散落的命令。
 
 ```bash
-dy browse start --budget 5 --minutes 15 --goal <目标>
+dy browse start --budget 5 --minutes 15 --goal <目标> --text-file plan.json   # 本轮要交付什么
+dy browse checkpoint <round-id> --text-file batch.json --if-match <revision>  # 这批筛出了什么
 dy browse watch --video-id <id>
 dy browse skip --video-id <id> --reason "不相关"
 dy browse end <round-id> --reason "看完"
 dy browse round <round-id>
 dy context browsing          # 之前看过、做过什么，避免重复
 ```
+
+**`browse start` 带计划，`browse checkpoint` 记判断，这两个一起才让「做完」有标准。** 只带预算的轮次只能说「看了几条」，说不出「找到了什么」。
+
+计划写一次不能改：改了交付条件就是换一轮。`browse round` 返回的 `revision` 是 checkpoint 的 `--if-match`，别人先写了一条就冲突，不会覆盖。
+
+checkpoint 里每个 criterion 只能是 `supported` / `not_supported` / `unknown`。前两个**必须引用真实事件**，没有证据就写 `unknown` —— 这正是这个命令存在的理由。`progress.qualified` 要求所有 criterion 都 supported 且没被 exclude，重复提交同一个人不会算两次，重复上一批的内容算无进展。
 
 ## 记忆
 
