@@ -400,6 +400,9 @@ export interface Contact {
 	name: string;
 	type: string;
 	unread: boolean;
+	// How many, when the page states a number. Null means the row shows an unread
+	// state without a count, or showed nothing readable — not "zero".
+	unread_count: number | null;
 }
 
 // A group row renders no participant sec_uid, so its identity comes from the
@@ -681,6 +684,28 @@ function identity(element: HTMLElement, header = false): string | null {
 		: null;
 }
 
+// The number of unread messages on a conversation row, or null when the page
+// does not say.
+//
+// The badge element is the count; a dot without a number is a state, not a
+// quantity, and reporting it as 1 would invent a figure. `null` is kept distinct
+// from 0 because "nothing unread" and "could not read it" lead a caller to
+// different actions.
+function unreadCount(row: HTMLElement): number | null {
+	const badge = row.querySelector<HTMLElement>(
+		'[class*="ConversationItemUnReadCount"],[class*="unread-count"],[data-e2e="unread-count"]',
+	);
+	if (badge) {
+		const text = clean(badge.textContent);
+		if (/^\d{1,4}$/.test(text)) return Number(text);
+		// The badge rendered but holds no number: that is an unread state, not a
+		// known quantity.
+		if (text) return null;
+	}
+	// Older shapes only carry a plain unread marker.
+	return row.querySelector('[class*="unread"],[class*="Unread"]') ? null : 0;
+}
+
 export function readContacts(): Contact[] {
 	guardPage();
 	return find(document, '[data-e2e="im-dialog"] [data-e2e="conversation-item"]').map((row) => ({
@@ -688,6 +713,7 @@ export function readContacts(): Contact[] {
 		name: clean(row.querySelector('[data-e2e="conversation-name"],.conversationConversationItemtitle')?.textContent),
 		type: row.getAttribute("data-conversation-type") ?? conversationType(row),
 		unread: !!row.querySelector('[class*="unread"],[class*="Unread"],[data-e2e="unread-count"]'),
+		unread_count: unreadCount(row),
 	}));
 }
 

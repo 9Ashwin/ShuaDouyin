@@ -28,6 +28,7 @@ import { inspectCreator } from "./operations/creator.ts";
 import { digest } from "./operations/digest.ts";
 import { pageFactsRead } from "./operations/facts.ts";
 import { readImage } from "./operations/image-file.ts";
+import { readInbox } from "./operations/inbox.ts";
 import { resolveLink } from "./operations/links.ts";
 import { liveChatRead, liveGiftSend, liveGifts, liveInfo, liveSay } from "./operations/live.ts";
 import {
@@ -687,6 +688,8 @@ export class App {
 				return { closed: await closeComments(session, signal) };
 			case "chat.list":
 				return listChats(session);
+			case "chat.inbox":
+				return readInbox(session, input, signal);
 			case "chat.close":
 				// Closing is a navigation step: the draft check lives on the page so
 				// an unsent message is never discarded by a caller that did not see it.

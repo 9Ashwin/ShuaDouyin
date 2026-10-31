@@ -1650,6 +1650,22 @@ export const COMMANDS: CommandSpec[] = [
 			"Requires --request-id. Stops on identity or draft conflicts. --mention picks one exact name from the group @ picker; an ambiguous or missing name fails instead of mentioning the wrong member. --emoji sends one sticker from the composer's smiley, on its own: combining it with --text is refused because the platform sends a sticker the moment it is clicked. The latest end of a loaded conversation is not yet verifiable, so dispatched messages return delivery_uncertain; inspect the receipt and conversation and do not automatically resend.",
 	},
 	{
+		id: "chat.inbox",
+		description: "Read what arrived unread, without deciding what to reply",
+		flags: [
+			{
+				key: "limit",
+				name: "--limit <count>",
+				description: "How many unread conversations to read",
+				type: "number",
+				default: 10,
+			},
+		],
+		effect: "read",
+		guidance:
+			"Lists conversations with unread messages and reads them, so a caller has the content in hand to answer. It does not write a reply and does not generate one. Reading a conversation marks it read on the platform, so a second run may report less than the first — this is an observation, not a subscription. A message sharing a work reports that work's id under shared_works; read it before replying, since a reply about a work nobody watched is the failure this prevents.",
+	},
+	{
 		id: "chat.recall",
 		description: "Retract one of your own messages, inside the platform's time window",
 		flags: [

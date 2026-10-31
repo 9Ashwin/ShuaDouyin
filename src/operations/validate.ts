@@ -283,7 +283,12 @@ export function validate(operation: string, raw: Input): Input {
 		required("recipient_id");
 		if (!/^(secuid:)?[A-Za-z0-9_-]{5,300}$/.test(input.recipient_id ?? ""))
 			throw new CliError("invalid_argument", "Use --recipient-id from chat list or forward list");
-	} else if (operation.startsWith("chat.") && !["chat.list", "chat.close"].includes(operation)) {
+	} else if (
+		operation.startsWith("chat.") &&
+		// These act on the conversation list as a whole, so there is no single
+		// conversation to name.
+		!["chat.list", "chat.close", "chat.inbox"].includes(operation)
+	) {
 		required("conversation_id");
 		if (!/^(native:|rendered:|user:|secuid:).{1,1000}$/.test(input.conversation_id ?? ""))
 			throw new CliError("invalid_argument", "Use --conversation-id returned by chat list");

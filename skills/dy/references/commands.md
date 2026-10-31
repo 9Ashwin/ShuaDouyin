@@ -270,6 +270,7 @@ sameness: varied | narrowing | template
 
 ```bash
 dy chat list                                     # 打开私信面板并列出会话
+dy chat inbox                                    # 谁在等我回：未读 + 对方说了最后一句
 dy chat read --conversation-id <id>              # 读一个会话
 dy chat send --conversation-id <id> --text "…"
 dy chat reply --conversation-id <id> --message-index <n> --text "…"
@@ -286,6 +287,12 @@ dy chat close                                    # 关面板（有草稿会拒�
 ```
 
 `chat.share` 和 `chat.forward` 不是一回事：前者是一条带链接的消息，后者是平台的原生卡片。
+
+**`chat inbox` 是「谁在等我回」的唯一入口。** 它不只报未读——打开会话会清掉未读标记，所以一条被人看过但没回的消息会失去徽标却仍然等你。它按「最后一句是不是对方说的」判断，这个信号清不掉。
+
+返回里 `awaiting_reply: true` 的就是要回的。`shared_works` 是对方发来的作品 id，**回之前先 `dy video digest --video-id <id>` 看内容**——对方发来视频是想让你看，只回一句「看到了」等于没看。
+
+它读完会关掉面板（不关的话会话详情页会盖住列表，下一个命令点不到行）。所以每跑一次都可能让下一次的未读数变少，这是观察不是订阅。
 
 `chat recall` 只能撤自己发的。平台窗口是 **3 分钟**——超时后页面上「撤回」这一项还在，点了会被服务端拒绝，所以别拿「按钮在不在」当许可。没有二次确认，点了就撤，所以它要 `--request-id`。
 
