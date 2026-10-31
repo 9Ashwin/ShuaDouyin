@@ -32,6 +32,7 @@
 		"format": "biome check --write .",
 		"test": "node scripts/test.ts",
 		"test:browser": "node scripts/test-browser.ts",
+		"crap": "node scripts/crap.ts",
 		"start": "node dist/cli.js",
 		"hooks:install": "husky || true",
 		"prepublishOnly": "node scripts/prepare.ts && node scripts/check-packed.ts",
