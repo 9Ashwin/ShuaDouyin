@@ -1650,6 +1650,23 @@ export const COMMANDS: CommandSpec[] = [
 			"Requires --request-id. Stops on identity or draft conflicts. --mention picks one exact name from the group @ picker; an ambiguous or missing name fails instead of mentioning the wrong member. --emoji sends one sticker from the composer's smiley, on its own: combining it with --text is refused because the platform sends a sticker the moment it is clicked. The latest end of a loaded conversation is not yet verifiable, so dispatched messages return delivery_uncertain; inspect the receipt and conversation and do not automatically resend.",
 	},
 	{
+		id: "chat.recall",
+		description: "Retract one of your own messages, inside the platform's time window",
+		flags: [
+			conversation,
+			{
+				key: "message_id",
+				name: "--message-id <id>",
+				description: "Stable ID of a message this account sent",
+				type: "string",
+				required: true,
+			},
+		],
+		effect: "account_write",
+		guidance:
+			"Requires --request-id. Only a message this account sent can be recalled; the page offers no recall entry on anyone else's, so the direction is checked before anything is clicked. The platform allows three minutes: past that the menu entry is still rendered but the request is refused, and this reports invalid_argument rather than guessing from the clock. There is no confirmation dialog, so a successful recall is confirmed by re-reading the conversation and finding the message gone.",
+	},
+	{
 		id: "chat.voice",
 		description: "Ask the page to transcribe voice messages and return the text",
 		flags: [

@@ -48,6 +48,7 @@ import {
 } from "./operations/navigation.ts";
 import { type Phrase, phraseMemories, phraseMemoryText, usePhrase } from "./operations/phrases.ts";
 import { readPerson } from "./operations/read-person.ts";
+import { recallMessage } from "./operations/recall.ts";
 import { userRelations } from "./operations/relations.ts";
 import { observeResponse } from "./operations/response-window.ts";
 import { skillInstall, skillStatus } from "./operations/skill.ts";
@@ -202,6 +203,17 @@ export class App {
 						chrome: this.chrome,
 						timeout: this.timeout,
 					});
+				}
+				// Recalling is its own path for the same reason deleting is: it has no
+				// composer, no settlement and no confirmation, so the generic write
+				// path would fill an input that does not exist.
+				if (operation === "chat.recall") {
+					const session = await this.chrome.connect(active, this.timeout);
+					try {
+						return await recallMessage(session, input, this.store, active);
+					} finally {
+						await session.close();
+					}
 				}
 				if (isWrite(operation)) {
 					// A failed send used to leave no trace: only the read path recorded

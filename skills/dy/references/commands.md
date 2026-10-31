@@ -280,11 +280,14 @@ dy chat history --conversation-id <id>           # 本地存过的历史
 dy chat changes --conversation-id <id>           # 最近两次读到的差异
 dy chat share --conversation-id <id> --video-id <id>   # 发文字链接
 dy chat forward --recipient-id <id> --video-id <id>    # 发原生作品卡
+dy chat recall --conversation-id <id> --message-id <id>  # 撤回自己发的一条
 dy forward list                                  # 当前作品分享面板能给谁
 dy chat close                                    # 关面板（有草稿会拒绝）
 ```
 
 `chat.share` 和 `chat.forward` 不是一回事：前者是一条带链接的消息，后者是平台的原生卡片。
+
+`chat recall` 只能撤自己发的。平台窗口是 **3 分钟**——超时后页面上「撤回」这一项还在，点了会被服务端拒绝，所以别拿「按钮在不在」当许可。没有二次确认，点了就撤，所以它要 `--request-id`。
 
 ## 人
 

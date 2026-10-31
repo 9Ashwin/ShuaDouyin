@@ -517,6 +517,97 @@ function fiberMessage(element: HTMLElement): { id: string | null; created_at: st
 	return { id: null, created_at: null };
 }
 
+// The element to right-click to open a message's menu, plus what the page says
+// about whose message it is.
+//
+// Two facts come from the DOM rather than from the caller. Direction is a fact
+// of the page, not of the request: the live page marks only the sender's own
+// rows, so a row without that marker came from the other side. And the platform
+// offers no recall entry at all on someone else's message, so a caller asking to
+// recall one is not a near miss to resolve — it is a request the page cannot
+// serve.
+export function messageTarget(messageID: string) {
+	guardPage();
+	const { root } = chatRoot();
+	const nodes = find(
+		root,
+		'[data-e2e="msg-item-content"],[data-e2e="message-content"],[data-testid="message-content"]',
+	).filter((node) => !node.parentElement?.closest('[data-e2e="msg-item-content"],[data-e2e="message-content"]'));
+	for (const node of nodes) {
+		const found = fiberMessage(node);
+		if (found.id !== messageID) continue;
+		const row = node.closest<HTMLElement>('[data-e2e="message-row"],[class*="messageMessageBoxmessageBox"]') ?? node;
+		// The live page marks direction on an ancestor several levels up
+		// (`MessageItemTextisFromMe`, `MessageBoxContentisFromMe`), not on the row
+		// element and not with a data attribute. Checking only the row reported
+		// every message as incoming, and recall refused the account's own.
+		const outgoing = (() => {
+			for (let element: HTMLElement | null = node; element && element !== root; element = element.parentElement) {
+				if (
+					element.getAttribute("data-direction") === "outgoing" ||
+					element.getAttribute("data-is-self") === "true" ||
+					element.getAttribute("data-is-from-me") === "true" ||
+					[...element.classList].some((value) => /isFromMe/i.test(value))
+				)
+					return true;
+			}
+			return false;
+		})();
+		const box = row.getBoundingClientRect();
+		if (box.width === 0 || box.height === 0) fail("selector_changed", "The message row is not laid out");
+		return {
+			message_id: found.id,
+			outgoing,
+			created_at: found.created_at,
+			x: Math.round(box.left + box.width / 2),
+			y: Math.round(box.top + box.height / 2),
+		};
+	}
+	// Not loaded is different from not there: the page keeps a window, and an id
+	// from an earlier read may simply be scrolled out of it.
+	fail(
+		"not_found",
+		"That message is not in the loaded conversation",
+		"Scroll the conversation back or read it again; only loaded rows carry an id.",
+	);
+}
+
+// Where the recall entry is in the menu that the right-click opened.
+//
+// The entry is found by its icon marker, not by its label: the menu has no
+// data-e2e and its classes are per-build, while `data-menu-icon` is the page's
+// own name for the action. Its presence is not permission — the page renders it
+// on messages that are past the window too, and the request is what settles it.
+export function recallPoint() {
+	const body = findRendered<HTMLElement>(document, '[class*="MessageOperatePopBodycontainer"]')[0];
+	if (!body) fail("selector_changed", "The message menu did not open", "Right-click the row and retry.");
+	const entry = [...body.querySelectorAll<HTMLElement>("*")]
+		.filter((element) => element.getAttribute("data-menu-icon") === "recall")
+		.map((element) => element.closest<HTMLElement>('[class*="buttonItem"]') ?? element)
+		.find((element) => {
+			const box = element.getBoundingClientRect();
+			return box.width > 0 && box.height > 0;
+		});
+	if (!entry)
+		fail("not_found", "This message has no recall entry", "The page only offers it on this account's own messages.");
+	const box = entry.getBoundingClientRect();
+	return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };
+}
+
+// Whether the page said the recall was refused, and why.
+//
+// A refusal is not a missing selector: the request went out and the platform
+// answered. The page states the reason in a toast, and the one that matters is
+// the window — past three minutes the entry is still there but the message
+// cannot be taken back, and telling a caller "selector changed" would send them
+// looking for a bug that is not there.
+export function recallOutcome() {
+	const text = clean(document.body.innerText);
+	const expired = /超过\s*3\s*分钟|不能(?:再)?撤回|撤回失败/.test(text);
+	const recalled = /你撤回了一条消息/.test(text);
+	return { recalled, expired };
+}
+
 function identity(element: HTMLElement, header = false): string | null {
 	const native = element.getAttribute("data-conversation-id") ?? element.getAttribute("data-conversation-short-id");
 	if (native) return `native:${native}`;

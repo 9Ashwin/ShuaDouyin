@@ -99,6 +99,9 @@ export function isWrite(operation: string): boolean {
 		"chat.image",
 		"chat.share",
 		"chat.forward",
+		// Recalling is a write even though it removes something: it goes out to the
+		// platform, the other side sees it, and it cannot be undone.
+		"chat.recall",
 		"video.like",
 		"video.favorite",
 		"user.follow",
@@ -253,6 +256,13 @@ export function validate(operation: string, raw: Input): Input {
 	}
 	if (operation === "comment.reply" || operation === "comment.replies") required("comment_id");
 	if (operation === "chat.capture") required("message_id");
+	// Recall names one message by its stable id. There is no confirmation dialog
+	// on the page, so the id is the only thing standing between the command and
+	// the wrong message.
+	if (operation === "chat.recall") {
+		required("message_id");
+		required("request_id");
+	}
 	if (operation === "chat.image" || operation === "comment.image") {
 		required("image");
 		if (!input.dry_run) required("request_id");

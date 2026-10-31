@@ -79,6 +79,7 @@ import {
 	currentVideo,
 	guardPage,
 	guardVideo,
+	messageTarget,
 	noteRoot,
 	pixelsChatMedia,
 	pixelsNote,
@@ -86,6 +87,8 @@ import {
 	readChat,
 	readContacts,
 	readPageState,
+	recallOutcome,
+	recallPoint,
 	scrollContainer,
 	signedInName,
 	userIdentity,
@@ -642,6 +645,12 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 				index,
 			};
 		}
+		case "chat.recall.target":
+			return messageTarget(args.message_id ?? "");
+		case "chat.recall.point":
+			return recallPoint();
+		case "chat.recall.outcome":
+			return recallOutcome();
 		case "chat.voice.menu": {
 			// The row's context menu offers 转文字 next to 回复 and 分享. Only a
 			// visible entry counts: a menu left from an earlier right-click stays in
