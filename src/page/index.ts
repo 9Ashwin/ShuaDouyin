@@ -73,6 +73,8 @@ import {
 } from "./live.ts";
 import { cleanupNoteSlide, noteHoverPoint, noteSlideReceipt, prepareNoteSlide } from "./note.ts";
 import {
+	aiEntryPoint,
+	aiSummary,
 	authenticatedUser,
 	chatRoot,
 	cleanupChatMedia,
@@ -669,6 +671,10 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 				index,
 			};
 		}
+		case "ai.entry.point":
+			return aiEntryPoint();
+		case "ai.summary":
+			return aiSummary();
 		case "chat.detail.open":
 			// Whether the panel is showing one conversation rather than the list.
 			// The detail view is the only one with a message list. data-e2e="chat-page"

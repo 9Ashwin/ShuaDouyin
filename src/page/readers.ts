@@ -900,6 +900,51 @@ function readEmoji(container: HTMLElement) {
 	return { name: label || null, images, requires_visual: !label };
 }
 
+// Where to click to open the work's AI summary.
+//
+// The entry is a 44x44 button beside the player rail and carries no text and no
+// data-e2e, only the class `ai-douyin-entry`. Its position is measured rather
+// than a selector handed to the caller because the rail re-renders on every feed
+// move, and a coordinate from a previous work would press the next one's button.
+export function aiEntryPoint() {
+	// The feed keeps the neighbouring slides laid out, so the next work has an
+	// entry too. Only the one inside the viewport belongs to the work on screen;
+	// pressing the other one opens the next work's summary instead.
+	const entries = findRendered<HTMLElement>(document, '[class*="ai-douyin-entry"]').filter((element) => {
+		const box = element.getBoundingClientRect();
+		return box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < innerHeight;
+	});
+	const entry = one(entries, "AI summary entry on screen");
+	const box = entry.getBoundingClientRect();
+	return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };
+}
+
+// The panel's text, once it has finished writing.
+//
+// `以上内容由AI生成` is the page's own disclaimer and the only reliable end of the
+// block: the prose above it is streamed, and everything after it is the input
+// box and the action row. Reading without that marker returns a truncated answer
+// that looks whole.
+export function aiSummary() {
+	const text = document.body.innerText;
+	const marker = "以上内容由AI生成";
+	const end = text.indexOf(marker);
+	if (end < 0) return { complete: false, summary: "", why: "The AI panel is not showing a finished answer" };
+	// Everything before the disclaimer includes the nav, the player and the
+	// comment rail. The summary is the last paragraph block before it, and the
+	// tab row (`TA的作品 / 评论 / 相关推荐`) is where that block starts.
+	const head = text.slice(0, end);
+	const tabs = /(?:TA的作品|相关推荐)\s*\n?\s*评论?\s*\n?\s*相关推荐\s*\n*/;
+	const after = tabs.test(head)
+		? head.slice(head.search(tabs) + (head.match(tabs)?.[0].length ?? 0)).trim()
+		: head.trim();
+	return {
+		complete: true,
+		summary: clean(after),
+		why: "",
+	};
+}
+
 function readShare(container: HTMLElement) {
 	let videoID: string | null = null;
 	let kind: "video" | "note" | null = null;

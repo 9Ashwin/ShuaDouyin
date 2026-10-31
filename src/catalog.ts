@@ -996,6 +996,14 @@ export const COMMANDS: CommandSpec[] = [
 		effect: "local",
 	},
 	{
+		id: "video.ai",
+		description: "Read the platform's own summary of the current work",
+		flags: [video],
+		effect: "read",
+		guidance:
+			"Opens the work's AI panel and returns what Douyin's model wrote about it. This covers what frames cannot — the whole video, the lyrics, what the comments are about — and it is the platform describing its own content rather than an observation: an answer here can be wrong in ways a screenshot cannot. Every response carries that distinction in its limits, and complete:false means the panel had not finished writing, so the text is partial. Use video digest for what the page shows and this for what the platform says about it; a claim worth repeating should be checked against the work.",
+	},
+	{
 		id: "video.digest",
 		description: "Gather what a work is about: identity, sampled positions and loaded comments",
 		flags: [

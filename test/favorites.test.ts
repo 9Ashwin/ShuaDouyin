@@ -76,3 +76,12 @@ test("the command is reachable and validates its tab", async (t) => {
 	await app.execute("init", { name: "ShuaDouyin" });
 	await assert.rejects(app.execute("video.favorites", { target: "不存在" }), { code: "invalid_argument" });
 });
+
+test("the AI summary is described as the platform's claim, not an observation", async () => {
+	// The whole point of the command is the distinction: it sees more than frames
+	// do, and it is a model talking about its own platform. A caller that quoted
+	// it as something watched here would be repeating a summary as a fact.
+	const { AI_SUMMARY_LIMITS } = await import("../src/operations/ai-summary.ts");
+	assert.ok(AI_SUMMARY_LIMITS.some((line: string) => /not observed by this tool/.test(line)));
+	assert.ok(AI_SUMMARY_LIMITS.some((line: string) => /complete:false/.test(line)));
+});

@@ -6,6 +6,7 @@ import { Knowledge, knowledgeOperation, validateKnowledge } from "./knowledge.ts
 import type { Memory } from "./memory/concept.ts";
 import { migrateLegacyLayout } from "./migrate.ts";
 import { askDouyin } from "./operations/ai-search.ts";
+import { readAiSummary } from "./operations/ai-summary.ts";
 import { rounds } from "./operations/browsing.ts";
 import { audio, capture, noteImage, noteSlide, observe } from "./operations/capture.ts";
 import { captureChatImage, listChats, readChat } from "./operations/chat.ts";
@@ -740,6 +741,8 @@ export class App {
 				);
 			case "ai.ask":
 				return askDouyin(session, input, signal);
+			case "video.ai":
+				return readAiSummary(session, input, signal);
 			case "video.favorites":
 				return readFavorites(session, input, signal);
 			case "person.read":
