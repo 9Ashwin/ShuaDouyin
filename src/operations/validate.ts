@@ -93,6 +93,8 @@ export interface Input {
 	actions?: string;
 	days?: number;
 	per_day?: number;
+	// Ask the platform's own model for a summary alongside the sampled frames.
+	ai?: boolean;
 }
 
 export function isWrite(operation: string): boolean {

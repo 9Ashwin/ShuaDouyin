@@ -3,6 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Session, Snapshot } from "../browser.ts";
 import { classifyComment } from "../comment-stance.ts";
 import { CliError } from "../errors.ts";
+import { AI_SUMMARY_LIMITS, readAiSummary } from "./ai-summary.ts";
 import { captureSnapshot, noteImage, noteSlide } from "./capture.ts";
 import { listComments } from "./comments.ts";
 import type { Input } from "./validate.ts";
@@ -73,6 +74,11 @@ export async function digest(
 	const duration = initial.video?.duration ?? null;
 	const frames: DigestFrame[] = [];
 	const limitations: string[] = [];
+	// Requested before the frames so a failure here is the caller's error rather
+	// than a digest that quietly comes back with pictures and no summary.
+	const ai = input.ai
+		? await readAiSummary(session, { ...input, video_id: initial.video?.id ?? initial.note?.id ?? undefined }, signal)
+		: null;
 	const directory = store.path(join("captures", `digest-${work.id}`));
 
 	// An image post is a set of pictures, and the set is the work. Sampling a video
@@ -195,9 +201,15 @@ export async function digest(
 		},
 		frames,
 		comments,
+		// The platform's own description, when asked for. It goes in a field of its
+		// own and never into `frames`: one is what was seen, the other is what the
+		// platform says, and merging them would make the difference invisible at the
+		// point a caller reads it.
+		...(ai ? { platform_summary: ai } : {}),
 		scope: frames.length ? "sampled_positions_and_loaded_comments" : "loaded_comments",
 		limitations: [
 			"Frames are screenshots of the viewport: they show what was on screen, not a claim about the whole work.",
+			...(ai ? [AI_SUMMARY_LIMITS[0] as string] : []),
 			...limitations,
 		],
 	};

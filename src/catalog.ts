@@ -1020,6 +1020,13 @@ export const COMMANDS: CommandSpec[] = [
 			},
 			{ key: "limit", name: "--limit <count>", description: "Comments to read (default 8)", type: "number" },
 			{ key: "output", name: "--output <directory>", description: "Frame output directory", type: "string" },
+			{
+				key: "ai",
+				name: "--ai",
+				description: "Also read the platform's own summary of the work",
+				type: "boolean",
+				default: false,
+			},
 		],
 		effect: "local",
 		guidance:

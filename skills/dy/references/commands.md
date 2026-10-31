@@ -105,6 +105,7 @@ dy note capture --index 0 --output x.png
 ```bash
 dy video digest [--frames N --limit 8]    # 标题 + 采样画面 + 评论；不写 --frames 就按时长自动选
 dy video ai                              # 平台自己的 AI 对这条作品的描述
+dy video digest --ai                     # 一次拿到截图和平台描述
 dy video seek --at 120                    # 跳到第 120 秒
 dy video observe --at 200 --seconds 4 --frames 2   # 在指定位置采样
 dy video play [--video-id <id>]           # 播放
