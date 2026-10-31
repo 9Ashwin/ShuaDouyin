@@ -45,6 +45,18 @@ dy skill install
 
 ## 更新
 
+**有新版时，任意一条命令的返回里会带 `update` 字段**，写明当前版本、最新版本和更新命令。这是给人看的提醒，不是给 agent 的执行指令——它不会自动更新，也不会催 agent 去做。
+
+检查一天最多一次，结果记在 `~/.dy/version-check.json`。查不到（离线、镜像不通）就静默；网络问题不会变成命令问题。
+
+看到它之后跑：
+
+```bash
+npm install -g shuadouyin@latest
+```
+
+想知道更细的：
+
 ```bash
 dy update --check
 ```

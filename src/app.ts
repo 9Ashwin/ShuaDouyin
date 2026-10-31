@@ -68,6 +68,7 @@ import { type VoiceRecord, voiceMemories, voiceMemoryText } from "./operations/v
 import { write } from "./operations/write.ts";
 import { quiet, type Reproduce } from "./progress.ts";
 import { type BrowserConfig, Store } from "./store.ts";
+import { updateNotice } from "./version-notice.ts";
 import type { VoiceProfile } from "./voice.ts";
 import { Workspaces } from "./workspace.ts";
 
@@ -323,9 +324,15 @@ export class App {
 								: { ...(result as object), _elapsed_ms: elapsed, ...(browse ? { _browse: browse } : {}) };
 						await this.store.append(operation, data);
 					}
+					// A newer release, checked at most once a day. It rides along the
+					// same way the setup and persona notes do, so a command added later
+					// cannot forget it — and it never fails a command: a notice is
+					// advice, and advice that can break a working command is not advice.
+					const update = await updateNotice(this.store.base).catch(() => null);
 					const notices = {
 						...(setup ? { setup } : {}),
 						...(persona ? { persona } : {}),
+						...(update ? { update } : {}),
 					};
 					return Object.keys(notices).length && result && typeof result === "object"
 						? { ...result, ...notices }

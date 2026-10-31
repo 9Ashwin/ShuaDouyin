@@ -31,7 +31,7 @@ export interface InstallShape {
 
 // The version this copy was built with, read beside the executable so an installed
 // package (which has no src/) can still report it.
-function packageVersion(): string | null {
+export function packageVersion(): string | null {
 	try {
 		const root = packageRoot();
 		const info = existsSync(join(root, "package.json")) ? join(root, "package.json") : null;
