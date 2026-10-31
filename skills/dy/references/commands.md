@@ -103,7 +103,7 @@ dy note capture --index 0 --output x.png
 ## 播放与取样
 
 ```bash
-dy video digest [--frames 3 --limit 8]    # 标题 + 三帧 + 评论，判断这条在讲什么
+dy video digest [--frames N --limit 8]    # 标题 + 采样画面 + 评论；不写 --frames 就按时长自动选
 dy video seek --at 120                    # 跳到第 120 秒
 dy video observe --at 200 --seconds 4 --frames 2   # 在指定位置采样
 dy video play [--video-id <id>]           # 播放
@@ -112,7 +112,9 @@ dy video screenshot --output x.png
 dy video audio --seconds 10 --output a.webm
 ```
 
-**`video digest` 是判断内容的第一选择。** 一条命令、3–4 秒，返回标题、三个位置的画面（25%/50%/75%，避开开头封面语和结尾求关注）和评论区摘录。长视频只看开头等于没看。
+**`video digest` 是判断内容的第一选择。** 一条命令、3–4 秒，返回标题、采样画面和评论区摘录。**不传 `--frames` 时帧数按时长算**：15 秒以下不采样，15–45 秒 1 帧，3 分钟以内 3 帧，再长每 2 分钟加 1 帧，上限 8。想让长视频多取几帧就显式传，但大多数时候不用管。
+
+`--frames 0` 只读身份和评论，不采样——筛候选时用这个，比每条都截图快得多。
 
 `--frames 0` 跳过所有采样只读评论（最快）；短片自动不采样并说明原因。
 
