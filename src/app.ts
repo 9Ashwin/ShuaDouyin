@@ -178,7 +178,7 @@ export class App {
 					try {
 						const result =
 							operation === "live.say"
-								? await liveSay(session, input, active)
+								? await liveSay(session, input, this.store, active)
 								: await liveGiftSend(session, input, this.store, active);
 						await this.store.append(operation, { request_id: input.request_id ?? null, ...(result as object) });
 						return result;

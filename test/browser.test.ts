@@ -5,9 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { App } from "../src/app.ts";
-import type { Session } from "../src/browser.ts";
+import { Session } from "../src/browser.ts";
 import { verifySearchFilters } from "../src/operations/navigation.ts";
 import { fixture } from "./fixture.ts";
+import { liveFixture } from "./live-fixture.ts";
+import { AdapterCoverage } from "./support/adapter-coverage.ts";
 
 test(
 	"isolated Chrome: sessions, reads, guarded writes and receipts",
@@ -29,10 +31,42 @@ test(
 		});
 		await app.execute("browser.start", { headless: true }, signal);
 		witness = await app.chrome.connect(signal);
+		// Coverage for src/page/ is opt-in: it costs a CDP session per measured
+		// call, and the ordinary run should not pay for a report nobody reads.
+		// DY_COVER_PAGE=1 writes it to dist/page-coverage.json.
+		let coverage: AdapterCoverage | undefined;
+		if (process.env.DY_COVER_PAGE === "1") {
+			coverage = new AdapterCoverage(await readFile(new URL("../dist/page-adapter.js", import.meta.url), "utf8"));
+			const context = witness.tab.context();
+			const covering = coverage;
+			await covering.start({ newCDPSession: (page) => context.newCDPSession(page) }, witness.tab);
+			// Every operation goes through Session.call, so sampling there catches
+			// all of them without each test having to remember to report.
+			const original = Session.prototype.call;
+			Session.prototype.call = async function instrumented(this: Session, operation: string, args: object = {}) {
+				try {
+					return await original.call(this, operation, args);
+				} finally {
+					await covering.collect();
+				}
+			} as typeof Session.prototype.call;
+			void original;
+			t.after(() => {
+				Session.prototype.call = original;
+				covering.writeReport(new URL("../dist/page-coverage.json", import.meta.url).pathname);
+			});
+		}
 
 		await witness.tab.route("**/*", async (route) => {
-			if (new URL(route.request().url()).origin === "https://www.douyin.com")
-				await route.fulfill({ contentType: "text/html", body: fixture });
+			const origin = new URL(route.request().url()).origin;
+			if (origin === "https://www.douyin.com") await route.fulfill({ contentType: "text/html", body: fixture });
+			// Live rooms are a different host, so they cannot be a route inside the
+			// works fixture. The room id decides which state is served.
+			else if (origin === "https://live.douyin.com")
+				await route.fulfill({
+					contentType: "text/html",
+					body: liveFixture(new URL(route.request().url()).pathname.includes("88888") ? "ended" : "live"),
+				});
 			else if (route.request().url() === "https://media.example/tainted.svg")
 				await route.fulfill({
 					contentType: "image/svg+xml",
@@ -1723,6 +1757,88 @@ test(
 			);
 			// Neither refusal may click any row; the fixture records each click.
 			assert.deepEqual(await witness?.tab.evaluate("window.forwardTargets"), []);
+		});
+
+		await t.test("a live room reports what it states and never what the picture shows", async () => {
+			// The picture is a canvas with no text layer. Every field below comes
+			// from something the room writes down; a reader that guessed at the
+			// picture would have nothing to put here.
+			await witness?.tab.goto("https://live.douyin.com/777777", { waitUntil: "domcontentloaded" });
+			const state = (await app.execute("live.info", {}, signal)) as {
+				room_id: string;
+				status: string;
+				host: string | null;
+				viewers: number | null;
+				can_comment: boolean;
+				video_readable: boolean;
+			};
+			assert.equal(state.room_id, "777777");
+			assert.equal(state.status, "live");
+			// The host comes from the title, not from a nickname class: a viewer's
+			// name in the chat list is not the host.
+			assert.equal(state.host, "示例主播");
+			assert.equal(state.viewers, 1284);
+			assert.equal(state.can_comment, true);
+			// This is the honest answer, not a failure to read.
+			assert.equal(state.video_readable, false);
+		});
+
+		await t.test("an ended room says so instead of looking empty", async () => {
+			// A finished broadcast keeps the page and states the fact. Reporting
+			// "live" here would make a caller wait for messages that will not come.
+			await witness?.tab.goto("https://live.douyin.com/88888", { waitUntil: "domcontentloaded" });
+			const state = (await app.execute("live.info", {}, signal)) as { status: string; can_comment: boolean };
+			assert.equal(state.status, "ended");
+			assert.equal(state.can_comment, false);
+		});
+
+		await t.test("danmaku rows are separated from gifts, joins and system lines", async () => {
+			// The room repeats each line in a wrapper and an inner element, and it
+			// repeats a line again after a reconnect. One line is one item.
+			await witness?.tab.goto("https://live.douyin.com/777777", { waitUntil: "domcontentloaded" });
+			const result = (await app.execute("live.chat", { limit: 50 }, signal)) as {
+				items: { author: string; text: string; kind: string }[];
+				counts: { chat: number; gift: number; join: number; system: number };
+				complete: boolean;
+			};
+			const said = result.items.filter((item) => item.kind === "chat");
+			assert.equal(said.length, 1, "the wrapper copy and the repeat collapse to one row");
+			assert.equal(said[0]?.author, "观众甲");
+			assert.equal(said[0]?.text, "主播这个走位是怎么练的");
+			// A gift is not a viewer talking, and a join has no author separator.
+			assert.equal(result.items.filter((item) => item.kind === "gift").length, 1);
+			assert.equal(result.items.filter((item) => item.kind === "join").length, 1);
+			assert.equal(result.items.filter((item) => item.kind === "system").length, 1);
+			// This is a window, not a history, and the answer says so.
+			assert.equal(result.complete, false);
+			assert.deepEqual(result.counts, { chat: 1, gift: 1, join: 1, system: 1 });
+		});
+
+		await t.test("a gift name is read from between the two prices", async () => {
+			// The panel writes "<price>钻<name><price>钻赠送". Taking the whole label
+			// as the name would never match what a caller asked for, and a near miss
+			// resolved by position would spend money on the wrong item.
+			const result = (await app.execute("live.gifts", {}, signal)) as {
+				items: { name: string; price: number | null }[];
+			};
+			const names = result.items.map((item) => `${item.price}钻${item.name}`);
+			assert.ok(names.includes("1钻人气票"), `got ${names.join(", ")}`);
+			assert.ok(names.includes("99钻Thuglife"), `got ${names.join(", ")}`);
+			// "更多查看" is a control, not an item, and carries no price at all.
+			assert.ok(!names.some((name) => name.includes("更多")));
+		});
+
+		await t.test("a danmaku send leaves a receipt and is not repeated", async () => {
+			// live.say is a write, so the same discipline as a comment applies: one
+			// request id, one send, and a repeat returns the receipt.
+			const input = { text: "这个走位确实好看", request_id: "live-say-fixture-01" };
+			const sent = (await app.execute("live.say", input, signal)) as { receipt?: { status: string } };
+			assert.ok(sent);
+			const first = (await witness?.tab.evaluate("window.liveSays")) as number;
+			assert.equal(first, 1);
+			// A second call with the same id must not type again.
+			await app.execute("live.say", input, signal).catch(() => undefined);
+			assert.equal(await witness?.tab.evaluate("window.liveSays"), 1);
 		});
 
 		await t.test("an uncertain dispatch is persisted and never automatically retried", async () => {

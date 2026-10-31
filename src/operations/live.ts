@@ -50,9 +50,16 @@ export async function liveChatRead(session: Session, input: Input) {
 	};
 }
 
-export async function liveSay(session: Session, input: Input, signal: AbortSignal) {
+export async function liveSay(session: Session, input: Input, store: Store, signal: AbortSignal) {
 	const text = (input.text ?? "").trim();
 	if (!text) throw new CliError("invalid_argument", "A danmaku needs text");
+	// The same request id is the same danmaku. Without this the second call typed
+	// and sent again — the caller reusing an id believes it is retrying a request
+	// that failed, and gets two lines in the room instead of one.
+	const key = input.request_id ?? randomUUID();
+	const receipts = await store.receipts();
+	const existing = Object.hasOwn(receipts, key) ? receipts[key] : undefined;
+	if (existing) return { request_id: key, confirmed: existing.status === "confirmed", replayed: true };
 	const state = await liveInfo(session);
 	if (state.status === "ended")
 		throw new CliError("state", "The broadcast has ended", { hint: "Wait for the next one." });
@@ -69,7 +76,11 @@ export async function liveSay(session: Session, input: Input, signal: AbortSigna
 			hint: "A draft is already in the room's input box; clear it by hand before sending.",
 			details: { held: cleared.before },
 		});
-	await session.tab.locator('[data-slate-editor="true"]').first().click({ timeout: 5000 });
+	// The room keeps a hidden copy of the editor first in the document, so a
+	// locator on the first match clicks something invisible and the typing goes
+	// nowhere. The adapter measured the editor it validated; click that.
+	const point = await session.call<{ x: number; y: number }>("live.composer.point", {});
+	await session.tab.mouse.click(point.x, point.y);
 	await session.tab.keyboard.insertText(text);
 	const held = await session.call<{ text: string }>("live.composer", {});
 	// The editor renders each line with a trailing zero-width sentinel. Stripping
@@ -85,6 +96,21 @@ export async function liveSay(session: Session, input: Input, signal: AbortSigna
 		});
 	const before = await session.call<{ items: { text: string; author: string }[] }>("live.chat", {});
 	const known = new Set(before.items.map((item) => `${item.author}\u0000${item.text}`));
+	// The receipt is written before the key press, exactly as the gift path does:
+	// a crash between here and the confirmation must leave evidence that a line
+	// may already be in the room, so a retry does not become a second line.
+	const receipt: Receipt = {
+		request_id: key,
+		fingerprint: `live.say:${state.room_id}:${text}`,
+		status: "prepared",
+		created_at: new Date().toISOString(),
+		updated_at: new Date().toISOString(),
+		operation: "live.say",
+	};
+	await store.saveReceipt(receipt);
+	receipt.status = "dispatching";
+	receipt.updated_at = new Date().toISOString();
+	await store.saveReceipt(receipt);
 	await session.tab.keyboard.press("Enter");
 	const deadline = Date.now() + 6000;
 	while (Date.now() < deadline) {
@@ -92,7 +118,13 @@ export async function liveSay(session: Session, input: Input, signal: AbortSigna
 		await delay(300, undefined, { signal });
 		const after = await session.call<{ items: { text: string; author: string }[] }>("live.chat", {});
 		const fresh = after.items.filter((item) => item.text === text && !known.has(`${item.author}\u0000${item.text}`));
-		if (fresh.length) return { confirmed: true, text, seen_in_chat: fresh.length, room_id: state.room_id };
+		if (fresh.length) {
+			receipt.status = "confirmed";
+			receipt.updated_at = new Date().toISOString();
+			receipt.result = { text, seen_in_chat: fresh.length, room_id: state.room_id };
+			await store.saveReceipt(receipt);
+			return { confirmed: true, request_id: key, text, seen_in_chat: fresh.length, room_id: state.room_id };
+		}
 	}
 	throw new CliError("delivery_uncertain", "The danmaku was typed and sent but not seen in the chat", {
 		hint: "Read the room before sending again; the line may still be there.",

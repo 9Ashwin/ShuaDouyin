@@ -359,8 +359,12 @@ export class Session {
 	async call<T = unknown>(operation: string, args: object = {}): Promise<T> {
 		this.signal.throwIfAborted();
 		adapter ??= await readFile(new URL("../dist/page-adapter.js", import.meta.url), "utf8");
+		// The injected script is given a name so a profiler can report its coverage.
+		// Unnamed scripts arrive with an empty url, and precise coverage is only
+		// useful if the ranges can be attributed to this bundle rather than to the
+		// page's own code.
 		const wire = await this.tab.evaluate<{ data?: T; error?: { code: string; message: string; hint?: string } }>(
-			`(() => {\n${adapter}\nreturn DouyinPage.call(${JSON.stringify(operation)}, ${JSON.stringify(args)});\n})()`,
+			`(() => {\n//# sourceURL=dy-page-adapter.js\n${adapter}\nreturn DouyinPage.call(${JSON.stringify(operation)}, ${JSON.stringify(args)});\n})()`,
 		);
 		if (wire.error) throw new CliError(wire.error.code, wire.error.message, { hint: wire.error.hint });
 		return wire.data as T;

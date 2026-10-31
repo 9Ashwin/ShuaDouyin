@@ -61,9 +61,17 @@ export function liveChat() {
 	// around it repeats the same sentence. Searching by text length instead pulled
 	// in a whole block of the chat as one row, which is how a gift line ended up
 	// holding twenty other people's messages.
-	const rows = [...document.querySelectorAll<HTMLElement>('[class*="webcast-chatroom___item"]')].filter(
+	// `[class*="___item"]` also matches the list container ("__items") and the
+	// wrapper around each row, so the match is narrowed to an element that
+	// contains no other match. That is what a single line is: everything else in
+	// the list is a box around one or more of them, and reading a box joins
+	// several people's messages into one.
+	const candidates = [...document.querySelectorAll<HTMLElement>('[class*="webcast-chatroom___item"]')].filter(
 		(element) =>
 			!(element.className ?? "").toString().includes("item-wrapper") && clean(element.textContent).length > 0,
+	);
+	const rows = candidates.filter(
+		(element) => !candidates.some((other) => other !== element && element.contains(other)),
 	);
 	// The room keeps a wrapper and an inner element for the same line; both match
 	// the class. One line is one item, so the pair is collapsed by its text.
@@ -101,6 +109,17 @@ export function liveComposer(): HTMLElement {
 
 export function readComposer(): string {
 	return clean(liveComposer().textContent);
+}
+
+// Where to click to start typing. The room keeps a hidden copy of the editor
+// first in the document, so clicking the first match lands on an invisible
+// element and the type never reaches the composer. The point comes from the same
+// element the reader validated, which is the whole reason it lives here rather
+// than in a locator written by the caller.
+export function composerPoint() {
+	const editor = liveComposer();
+	const rect = editor.getBoundingClientRect();
+	return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
 }
 
 // Clearing must be a real deletion through the editor, not an assignment to its

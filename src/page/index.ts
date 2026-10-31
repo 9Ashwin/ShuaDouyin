@@ -62,6 +62,7 @@ import {
 } from "./interactions.ts";
 import {
 	clearComposer,
+	composerPoint,
 	giftItems,
 	giftsSent,
 	liveChat,
@@ -328,6 +329,8 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			return liveChat();
 		case "live.composer":
 			return { text: readComposer() };
+		case "live.composer.point":
+			return composerPoint();
 		case "live.clear":
 			return clearComposer();
 		case "live.gifts":

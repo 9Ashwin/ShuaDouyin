@@ -63,7 +63,14 @@ npm uninstall -g shuadouyin
 装 skill 给 agent 用（可选）：
 
 ```bash
+npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
+```
+
+或者用 CLI 自己装到 agent 目录：
+
+```bash
 dy skill install
+dy skill status   # 已装的副本和仓库是否一致
 ```
 
 ## 开始使用
@@ -109,7 +116,15 @@ dy video info                # 读当前作品
 dy guide      # 返回完整的使用说明（约 3 万字），agent 读这个
 ```
 
-或者把 `skills/dy` 装进你的 agent 技能目录。里面按主题分成八个参考文件：浏览与成长、记忆与人格、社交、直播、日报、自我改进、命令全表，以及**平台事实**——最后一个是踩过的坑，读它能省掉一次重来。
+或者把 skill 装进你的 agent 技能目录，这样它知道什么时候该用 `dy`、怎么用：
+
+```bash
+npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
+```
+
+`skills/dy` 里按主题分成八个参考文件：浏览与成长、记忆与人格、社交、直播、日报、自我改进、命令全表，以及**平台事实**——最后一个是踩过的坑，读它能省掉一次重来。
+
+`SKILL.md` 本身只有两百来行，是每次对话都会加载的那部分；参考文件按需读。
 
 ## 设计原则
 
