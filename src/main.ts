@@ -4,7 +4,9 @@ import { App, type AppOptions, type Input } from "./app.ts";
 import { COMMANDS, type CommandSpec, GLOBAL_FLAGS, GROUPS, schema } from "./catalog.ts";
 import { CliError, errorData, errorExit, normalizeError } from "./errors.ts";
 import { progressTo } from "./progress.ts";
+import { stateDirectory } from "./store.ts";
 import { runTui } from "./tui.ts";
+import { updateNotice } from "./version-notice.ts";
 
 export interface Streams {
 	stdout: { write: (text: string) => unknown };
@@ -37,7 +39,18 @@ function display(value: string): boolean {
 
 export function createProgram(io: Streams, parentSignal?: AbortSignal, version = ""): Command {
 	const root = new Command("dy");
-	root.description("Douyin capabilities for agents, with an optional terminal UI").version(version);
+	root.description("Douyin capabilities for agents, with an optional terminal UI");
+	// `--version` is the one command whose whole answer is the version, so it is
+	// where a newer release is most likely to be asked about — and where a plain
+	// number told the owner nothing. It stays a presentation exception (help,
+	// version and the TUI are the documented ones), so the notice is a second line
+	// rather than a JSON envelope; scripts that read the first line still get what
+	// they got before. `dy update --check` is still the machine-readable form.
+	root.version(version, "-v, --version", "Print the version, and say if a newer release exists");
+	root.addHelpText(
+		"after",
+		"\nRun `dy update --check` for install shape, the commit this build came from, and the newest release as JSON.",
+	);
 	root.exitOverride().showHelpAfterError(false);
 	root.configureOutput({
 		writeOut: (value) => io.stdout.write(value),
@@ -181,6 +194,21 @@ export async function run(
 	signal?: AbortSignal,
 ): Promise<number> {
 	try {
+		// `--version` is answered here rather than by commander so the answer can
+		// include a newer release. Commander's own handler is synchronous and writes
+		// the string it was given, so the check could not run inside it.
+		//
+		// The first line is the version and nothing else, which is what every caller
+		// that parses this already reads. The notice is a second line, and it only
+		// appears when there is something to say.
+		if (args.length === 1 && (args[0] === "--version" || args[0] === "-V")) {
+			const version = await packageVersion();
+			io.stdout.write(`${version}\n`);
+			const update = await updateNotice(stateDirectory(), { timeoutMs: 2000 }).catch(() => null);
+			if (update && typeof update === "object" && "message" in update)
+				io.stdout.write(`${String((update as { message: unknown }).message)}\n`);
+			return 0;
+		}
 		await createProgram(io, signal, await packageVersion()).parseAsync(args, { from: "user" });
 		return 0;
 	} catch (error) {

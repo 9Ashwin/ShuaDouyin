@@ -40,7 +40,10 @@ test("schema and help come from the same command catalog", async () => {
 		assert.match(help.stdout, /Usage: dy/);
 		assert.equal(help.stderr, "");
 	}
-	assert.equal((await invoke(["--version"])).stdout.trim(), await packageVersion());
+	// The first line is the version and nothing else. A newer release is announced
+	// on a second line, so this reads the first rather than trimming the whole
+	// answer: a caller that parses this already reads a line, not a blob.
+	assert.equal((await invoke(["--version"])).stdout.trim().split("\n")[0], await packageVersion());
 });
 
 test("version flag uses the version supplied by package metadata", async () => {
