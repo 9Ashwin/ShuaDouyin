@@ -58,7 +58,13 @@ export const fixture = `<!doctype html>
 <div data-e2e="conversation-item" data-conversation-id="30001" data-conversation-type="direct"><span data-e2e="conversation-name">好友一</span></div>
 <div data-e2e="chat-page" data-conversation-id="30001">
 <div data-e2e="chat-header" data-conversation-id="30001" data-conversation-type="direct"><span data-e2e="chat-title">好友一</span><button data-e2e="im-close">关闭</button></div>
-<div data-e2e="message-list"><div data-e2e="message-row" data-message-id="30001" data-direction="incoming"><div data-e2e="message-content"><span data-e2e="message-text">你好</span></div></div></div>
+<div data-e2e="message-list"><div data-e2e="message-row" data-message-id="30001" data-direction="incoming"><div data-e2e="message-content"><span data-e2e="message-text">你好</span></div></div>
+<!-- A shared work renders a cover and an author and carries no link, so an
+     anchor scan finds nothing. The id lives in the record the card was rendered
+     from, on the message fiber. The live page has used three class names for
+     this card; this is the one it uses as of 2026-10. -->
+<div data-e2e="message-row" data-message-id="30002" data-direction="incoming"><div data-e2e="message-content"><div class="BulletBulletVideocontainer" id="shared-card-fixture"><img alt="封面" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='80'%3E%3C/svg%3E"><span>分享作者</span></div></div></div>
+</div>
 <div data-e2e="msg-input"><div contenteditable="true"></div><div class="MsgInputFileUploadim-saas-fileUploader"><input type="file" class="semi-upload-hidden-input" multiple accept=".png,.jpg,.gif"><button>图片</button></div><svg class="messageMsgInputiconAction" width="32" height="32" viewBox="0 0 32 32"><path d="M16 4a12 12 0 1 0 0 24 12 12 0 0 0 0-24"/></svg></div><button data-e2e="send-msg-btn">发送</button>
 </div></div>
 <div data-e2e="search-card" style="display:none"><a href="/video/12345">搜索结果甲</a></div>
@@ -184,6 +190,10 @@ q('#share').style.display='none';};
 q('[data-e2e="video-share-icon-container"]').onmouseenter=()=>q('#share').style.display='block';
 q('[data-e2e="video-share-icon-container"]').onclick=()=>q('#share').style.display='block';
 // A direct chat renders its counterpart's sec_uid inside conversation props.
+// The shared card's id is not in the DOM; it is in the message record the card
+// was rendered from, which the reader reaches through the React fiber.
+const sharedCard=q('#shared-card-fixture');
+Object.defineProperty(sharedCard,'__reactFiber$fixture',{value:{memoizedProps:{message:{parsedContent:{itemId:'70001',content_title:'分享的作品标题',is_slides:false}}},return:null}});
 const contactRow=q('[data-e2e="im-dialog"] [data-e2e="conversation-item"]');
 Object.defineProperty(contactRow,'__reactProps$0',{value:{children:{props:{conversation:{_toParticipantSecUserId:'MS4wLjABAAAAshare01'}}}}});
 // The IM dialog is what chat close removes.

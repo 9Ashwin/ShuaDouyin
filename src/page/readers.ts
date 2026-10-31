@@ -917,17 +917,43 @@ function readShare(container: HTMLElement) {
 		'[data-e2e="shared-video-title"],[class*="MessageItemShareAwemetitle"],[class*="MessageItemShareAwemedesc"]',
 	);
 	const author = container.querySelector('[data-e2e="shared-video-author"],[class*="MessageItemShareAwemeauthorName"]');
-	// Verified on the live page on 2026-10-27: a share card renders only the
-	// author name and a cover image. It carries no link and no aweme id, so
-	// video_id is genuinely unavailable rather than a failed lookup. The author
-	// is display text with no account id either.
+	// A share card renders the author and a cover and carries no link, so an
+	// anchor scan finds nothing. The id is still there, in the record the card was
+	// rendered from: the message's parsedContent holds itemId. Reading the card as
+	// unidentifiable (which this did until 2026-10-31) meant a caller could see
+	// that a work had been shared and could not open it.
+	const shared = (() => {
+		const key = Object.getOwnPropertyNames(container).find((name) => name.startsWith("__reactFiber$"));
+		let fiber = key ? own(container, key) : undefined;
+		for (let depth = 0; depth < 12 && fiber; depth++, fiber = own(fiber, "return")) {
+			const content = own(own(fiber, "memoizedProps"), "message");
+			const parsed = own(content, "parsedContent");
+			if (!parsed) continue;
+			// itemId is a plain own property on the parsed record; inherited() is
+			// tried first for shapes that carry it on a prototype, but own() is what
+			// the live page has and reading only inherited() found nothing.
+			const id =
+				scalarID(own(parsed, "itemId")) ??
+				scalarID(inherited(parsed, "itemId")) ??
+				scalarID(inherited(parsed, "awemeId"));
+			if (!id || !/^\d{1,64}$/.test(id)) continue;
+			return {
+				id,
+				kind: inherited(parsed, "is_slides") === true ? ("note" as const) : ("video" as const),
+				title: clean(String(inherited(parsed, "content_title") ?? "")),
+			};
+		}
+		return null;
+	})();
+	const resolvedID = videoID ?? shared?.id ?? null;
+	const resolvedKind = kind ?? shared?.kind ?? "video";
 	return {
-		video_id: videoID,
-		url: videoID ? `https://www.douyin.com/${kind}/${videoID}` : null,
-		title: clean(title?.textContent),
+		video_id: resolvedID,
+		url: resolvedID ? `https://www.douyin.com/${resolvedKind}/${resolvedID}` : null,
+		title: clean(title?.textContent) || shared?.title || "",
 		author: clean(author?.textContent),
-		is_image_post: kind === "note" || !!container.querySelector('[class*="MessageItemShareAwemephotosTag"]'),
-		identifiable: videoID !== null,
+		is_image_post: resolvedKind === "note" || !!container.querySelector('[class*="MessageItemShareAwemephotosTag"]'),
+		identifiable: resolvedID !== null,
 	};
 }
 
@@ -985,8 +1011,12 @@ export function readChat(expected?: string) {
 			const incoming = !outgoing;
 			const text = node.querySelector<HTMLElement>('[data-e2e="message-text"],[class*="MessageItemTextcontainer"]');
 			const emoji = node.querySelector<HTMLElement>('[data-e2e="message-emoji"],[class*="MessageItemEmojiemojiBox"]');
+			// A shared work has rendered under three different class names since
+			// 2026-10: MessageItemShareAweme*, BulletBulletVideo*, and the
+			// data-e2e card. Naming only one made the others read as "unsupported",
+			// which is indistinguishable from a message the adapter cannot describe.
 			const share = node.querySelector<HTMLElement>(
-				'[data-e2e="shared-video-card"],[class*="MessageItemShareAwemecontainer"]',
+				'[data-e2e="shared-video-card"],[class*="MessageItemShareAwemecontainer"],[class*="BulletBulletVideocontainer"]',
 			);
 			// The live class is MessageItemImageImageBox with a capital I after the
 			// prefix; the selectors named a lowercase variant and a "container" that

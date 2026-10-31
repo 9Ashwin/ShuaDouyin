@@ -809,6 +809,16 @@ test(
 			assert.equal(read.messages[0].id, "30001");
 			assert.equal(read.scope, "loaded_dom");
 			assert.equal(read.complete, false);
+			// A shared work carries no link, so its id can only come from the record
+			// the card renders from. Reading the card as unidentifiable meant a caller
+			// could see that something had been shared and could not open it.
+			const shared = (await app.execute("chat.read", { conversation_id: contacts[0].id }, signal)) as {
+				messages: { id: string; kind: string; share?: { video_id: string | null; title: string } }[];
+			};
+			const card = shared.messages.find((message) => message.id === "30002");
+			assert.equal(card?.kind, "share");
+			assert.equal(card?.share?.video_id, "70001");
+			assert.equal(card?.share?.title, "分享的作品标题");
 			await witness?.tab.evaluate(() => {
 				const list = document.querySelector('[data-e2e="message-list"]');
 				const row = document.createElement("div");
@@ -1007,6 +1017,9 @@ test(
 
 		await t.test("a sticker is sent from the smiley grid and its result never repeats", async () => {
 			const sends = Number(await witness?.tab.evaluate("window.stickerSends"));
+			const baselineRows = Number(
+				await witness?.tab.evaluate(() => document.querySelectorAll('[data-e2e="message-row"]').length),
+			);
 			const input = { conversation_id: "native:30001", emoji: "比心", request_id: "fixture-sticker-01" };
 			// A sticker's own click is the send, and the platform's row carries no
 			// text to match it against. The honest answer is therefore uncertain:
@@ -1017,7 +1030,10 @@ test(
 			const rows = await witness?.tab.evaluate(() =>
 				[...document.querySelectorAll('[data-e2e="message-row"]')].map((row) => row.getAttribute("data-message-id")),
 			);
-			assert.ok(Array.isArray(rows) && rows.length === sends + 1 + 2, JSON.stringify(rows));
+			// The baseline is whatever the fixture's conversation already holds; counting
+			// it as a literal broke every time a row was added to the fixture, which
+			// says nothing about whether the send worked.
+			assert.ok(Array.isArray(rows) && rows.length === sends + 1 + baselineRows, JSON.stringify(rows));
 			const receipt = (await app.store.receipts())[input.request_id];
 			assert.equal(receipt.status, "dispatching");
 			// The same request ID answers from the receipt instead of clicking again.
