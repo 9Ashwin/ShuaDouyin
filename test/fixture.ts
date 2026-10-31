@@ -193,7 +193,12 @@ q('[data-e2e="video-share-icon-container"]').onclick=()=>q('#share').style.displ
 // The shared card's id is not in the DOM; it is in the message record the card
 // was rendered from, which the reader reaches through the React fiber.
 const sharedCard=q('#shared-card-fixture');
-Object.defineProperty(sharedCard,'__reactFiber$fixture',{value:{memoizedProps:{message:{parsedContent:{itemId:'70001',content_title:'分享的作品标题',is_slides:false}}},return:null}});
+// parsedContent is an accessor on the live page, not a data property, and own()
+// deliberately refuses accessors. Writing it as a plain property here made the
+// fixture pass while the real page returned no id at all; the getter shape is
+// what keeps that from happening again.
+const sharedRecord={itemId:'70001',content_title:'分享的作品标题',is_slides:false};
+Object.defineProperty(sharedCard,'__reactFiber$fixture',{value:{memoizedProps:{message:{get parsedContent(){return sharedRecord}}},return:null}});
 const contactRow=q('[data-e2e="im-dialog"] [data-e2e="conversation-item"]');
 Object.defineProperty(contactRow,'__reactProps$0',{value:{children:{props:{conversation:{_toParticipantSecUserId:'MS4wLjABAAAAshare01'}}}}});
 // The IM dialog is what chat close removes.

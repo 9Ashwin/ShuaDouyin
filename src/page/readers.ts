@@ -927,7 +927,11 @@ function readShare(container: HTMLElement) {
 		let fiber = key ? own(container, key) : undefined;
 		for (let depth = 0; depth < 12 && fiber; depth++, fiber = own(fiber, "return")) {
 			const content = own(own(fiber, "memoizedProps"), "message");
-			const parsed = own(content, "parsedContent");
+			// parsedContent is a getter on the live page, and own() deliberately
+			// refuses accessors so the adapter never runs React callbacks. Reading
+			// this one is opt-in, by name, which is what getterValue is for: without
+			// it the id was never read and every shared work came back unidentifiable.
+			const parsed = own(content, "parsedContent") ?? getterValue(content, "parsedContent");
 			if (!parsed) continue;
 			// itemId is a plain own property on the parsed record; inherited() is
 			// tried first for shapes that carry it on a prototype, but own() is what
