@@ -991,7 +991,11 @@ export function readChat(expected?: string) {
 	if (!id || (expected && id !== expected)) {
 		fail("identity_mismatch", "Current conversation does not match the requested stable ID");
 	}
-	const messages = find(
+	// find() keeps only what is inside the viewport, and a conversation scrolled up
+	// is mostly outside it: a group with eleven messages returned four, and every
+	// one it dropped was from someone else. A message above the fold is still a
+	// message, so this list is read with the same rule the comment list uses.
+	const messages = findRendered(
 		root,
 		'[data-e2e="msg-item-content"],[data-e2e="message-content"],[data-testid="message-content"]',
 	)

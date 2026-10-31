@@ -807,6 +807,14 @@ test(
 				complete: boolean;
 			};
 			assert.equal(read.messages[0].id, "30001");
+			// A row below the fold is still a row. Reading with a visibility test
+			// returned only what was on screen, which on a real group meant every
+			// message from anyone else was missing and the conversation looked
+			// one-sided — the exact opposite of what a reader is for.
+			assert.ok(
+				read.messages.some((message) => message.id === "30009"),
+				"a message scrolled out of view is still read",
+			);
 			assert.equal(read.scope, "loaded_dom");
 			assert.equal(read.complete, false);
 			// A shared work carries no link, so its id can only come from the record

@@ -124,12 +124,12 @@ export async function readInbox(session: Session, input: Input, signal: AbortSig
 		const shared = messages
 			.filter((message) => message.direction === "incoming" && message.shares_work)
 			.map((message) => message.shares_work as string);
-		// Whose turn it is, read from the newest message rather than from the badge
-		// and not from array position: the page keeps a window, so a message that
-		// arrived but is not in that window would sit behind older ones in the
-		// array. Sorting by timestamp is what makes "they spoke last" true.
-		const last = [...messages].sort((left, right) => (left.at ?? "").localeCompare(right.at ?? "")).at(-1);
-		const awaitingReply = !!last && last.direction === "incoming";
+		// The reader returns newest first, so the newest is index 0 — not the last
+		// element. Reading the last element asked "did the oldest loaded message
+		// come from them", which reported a conversation as awaiting a reply when
+		// this account had already answered it, and the reverse.
+		const newest = [...messages].sort((left, right) => (right.at ?? "").localeCompare(left.at ?? ""))[0];
+		const awaitingReply = !!newest && newest.direction === "incoming";
 		if (!awaitingReply && !contact.unread && (contact.unread_count ?? 0) === 0) continue;
 		conversations.push({
 			conversation_id: contact.id,
@@ -137,11 +137,12 @@ export async function readInbox(session: Session, input: Input, signal: AbortSig
 			type: contact.type,
 			unread_count: contact.unread_count,
 			awaiting_reply: awaitingReply,
-			// The tail is what a reply answers. The head is context that was already
-			// in the window the first time it was read.
-			messages: messages.slice(-10),
+			// The newest ten, which is what a reply answers. The reader returns
+			// newest first, so these are the head of the array; slice(-10) took the
+			// oldest ten and made the returned window the opposite of useful.
+			messages: messages.slice(0, 10),
 			shared_works: [...new Set(shared)],
-			last_message_at: last?.at ?? null,
+			last_message_at: newest?.at ?? null,
 		});
 	}
 	// Opening a conversation to read it marks it read on the platform. Saying so
