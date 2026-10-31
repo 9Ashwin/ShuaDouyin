@@ -22,6 +22,55 @@ export type PlaybackInterval = {
 	viewport_intersects: boolean;
 };
 
+type Video = NonNullable<Snapshot["video"]>;
+
+// Whether two samples describe the same work at two trustworthy positions. A
+// different id means the feed moved; a negative or NaN time means the element
+// was mid-load; a time past the duration means the reading is not the work's
+// own clock. Any of those and the pair says nothing about playback.
+function comparable(a: Video | null | undefined, b: Video | null | undefined): boolean {
+	if (!a || !b || !a.id || a.id !== b.id) return false;
+	if (!Number.isFinite(a.time) || !Number.isFinite(b.time) || a.time < 0 || b.time < 0) return false;
+	const within = (video: Video) => video.duration === null || video.time <= video.duration + 0.5;
+	return within(a) && within(b);
+}
+
+// The two durations have to agree, because a changed duration means the element
+// was replaced rather than advanced. A null or non-positive duration is unknown,
+// not zero, so it is a change rather than a starting point.
+function sameTimeline(a: Video, b: Video): boolean {
+	if (a.duration === null || b.duration === null) return false;
+	if (!Number.isFinite(a.duration) || !Number.isFinite(b.duration)) return false;
+	if (a.duration <= 0 || b.duration <= 0) return false;
+	return Math.abs(a.duration - b.duration) <= 0.5;
+}
+
+// The order matters: the first condition that holds is the answer, and a paused
+// video that also looks stalled is paused.
+function classifyPair(a: Video, b: Video, advance: number, wall: number): PlaybackInterval["classification"] {
+	if (!sameTimeline(a, b)) return "duration_changed";
+	if (a.paused || b.paused) return "paused";
+	if (a.ready_state < 2 || b.ready_state < 2) return "buffering";
+	if (advance < -0.05) return "backward_or_loop";
+	// Faster than wall time is a seek or a loop, not watching.
+	if (advance > wall * 1.25 + 0.25) return "jump_or_fast";
+	if (advance <= 0.05) return "stalled";
+	return "progress";
+}
+
+// Total advancement across the intervals that made progress, counting each second
+// of the work at most once. A loop that replays a range must not add to the
+// total: the work advanced once, however many times it was watched.
+function mergedAdvancement(ranges: [number, number][]): number {
+	let observed = 0;
+	let rangeEnd = Number.NEGATIVE_INFINITY;
+	for (const [start, end] of [...ranges].sort((left, right) => left[0] - right[0] || left[1] - right[1])) {
+		observed += Math.max(0, end - Math.max(start, rangeEnd));
+		rangeEnd = Math.max(rangeEnd, end);
+	}
+	return observed;
+}
+
 // Endpoints describe observable advancement, not uninterrupted viewing or comprehension.
 export function summarizePlayback(samples: PlaybackSample[]) {
 	const intervals: PlaybackInterval[] = [];
@@ -29,6 +78,7 @@ export function summarizePlayback(samples: PlaybackSample[]) {
 	for (let index = 1; index < samples.length; index++) {
 		const left = samples[index - 1];
 		const right = samples[index];
+		if (!left || !right) continue;
 		const a = left.state.video;
 		const b = right.state.video;
 		const validClock =
@@ -40,36 +90,9 @@ export function summarizePlayback(samples: PlaybackSample[]) {
 		const viewport = a?.viewport_intersects === true && b?.viewport_intersects === true;
 		let classification: PlaybackInterval["classification"] = "unavailable";
 		let advance: number | null = null;
-		if (
-			validClock &&
-			a &&
-			b &&
-			a.id &&
-			a.id === b.id &&
-			Number.isFinite(a.time) &&
-			Number.isFinite(b.time) &&
-			a.time >= 0 &&
-			b.time >= 0 &&
-			(a.duration === null || a.time <= a.duration + 0.5) &&
-			(b.duration === null || b.time <= b.duration + 0.5)
-		) {
+		if (validClock && a && b && comparable(a, b)) {
 			advance = b.time - a.time;
-			if (
-				a.duration === null ||
-				b.duration === null ||
-				!Number.isFinite(a.duration) ||
-				!Number.isFinite(b.duration) ||
-				a.duration <= 0 ||
-				b.duration <= 0 ||
-				Math.abs(a.duration - b.duration) > 0.5
-			)
-				classification = "duration_changed";
-			else if (a.paused || b.paused) classification = "paused";
-			else if (a.ready_state < 2 || b.ready_state < 2) classification = "buffering";
-			else if (advance < -0.05) classification = "backward_or_loop";
-			else if (advance > wall * 1.25 + 0.25) classification = "jump_or_fast";
-			else if (advance <= 0.05) classification = "stalled";
-			else classification = "progress";
+			classification = classifyPair(a, b, advance, wall);
 		}
 		intervals.push({
 			from: index - 1,
@@ -81,15 +104,9 @@ export function summarizePlayback(samples: PlaybackSample[]) {
 		});
 		if (classification === "progress" && a && b) ranges.push([a.time, b.time]);
 	}
-	let observed = 0;
-	let rangeEnd = Number.NEGATIVE_INFINITY;
-	for (const [start, end] of ranges.sort((left, right) => left[0] - right[0] || left[1] - right[1])) {
-		observed += Math.max(0, end - Math.max(start, rangeEnd));
-		rangeEnd = Math.max(rangeEnd, end);
-	}
 	return {
 		intervals,
-		observed_advancement_seconds: observed,
+		observed_advancement_seconds: mergedAdvancement(ranges),
 		continuity_proven: false,
 		limitations: ["Endpoint samples cannot prove uninterrupted playback, visibility, comprehension or preference."],
 	};

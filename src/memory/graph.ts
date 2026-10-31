@@ -81,29 +81,43 @@ export function resolveReferences(entries: Entry[]): { resolved: ResolvedReferen
 			}
 			add("path", path, byPath.get(path));
 		};
-		const tokens = marked.lexer(row.body);
-		marked.walkTokens(tokens, (token) => {
-			if (token.type === "link") resolvePath(token.href);
-			if (token.type === "html") {
-				const html = token.raw
-					.replace(/<!--[\s\S]*?-->/g, "")
-					.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
-				for (const anchor of html.matchAll(/<a\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi)) {
-					const href = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i.exec(anchor[0]);
-					if (!href) continue;
-					const value = href[1] ?? href[2] ?? href[3] ?? "";
-					if (/^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(value)) continue;
-					if (/&(?:#[0-9]+|#x[0-9a-f]+|[a-z]+);/i.test(value)) add("path", value, undefined, "unverified");
-					else resolvePath(value);
-				}
+		// Raw HTML is stripped of comments and script bodies first: both can contain
+		// something that looks like a link and is not one. A relative href is a
+		// reference to another memory; an absolute one is not, and is skipped
+		// rather than reported.
+		const htmlReferences = (token: { raw: string }) => {
+			const html = token.raw.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
+			for (const anchor of html.matchAll(/<a\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi)) {
+				const href = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i.exec(anchor[0]);
+				if (!href) continue;
+				const value = href[1] ?? href[2] ?? href[3] ?? "";
+				if (/^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(value)) continue;
+				// An entity in the href means the value is not the one the author
+				// wrote. Resolving it would be a guess, so it is reported as unverified.
+				if (/&(?:#[0-9]+|#x[0-9a-f]+|[a-z]+);/i.test(value)) add("path", value, undefined, "unverified");
+				else resolvePath(value);
 			}
-			if (token.type !== "text" || ("tokens" in token && token.tokens?.length)) return;
-			for (const match of token.text.matchAll(/\[\[([^\]]+)\]\]/g)) {
+		};
+		// A wiki link resolves only when exactly one memory carries that slug. Two
+		// candidates make it ambiguous rather than picking one.
+		const wikiReferences = (token: unknown) => {
+			const text = typeof (token as { text?: unknown }).text === "string" ? (token as { text: string }).text : "";
+			if (!text) return;
+			for (const match of text.matchAll(/\[\[([^\]]+)\]\]/g)) {
 				const label = slugify(match[1]);
 				if (!label) continue;
 				const found = bySlug.get(label) ?? [];
 				add("wiki", label, found.length === 1 ? found[0] : undefined, found.length > 1 ? "ambiguous" : "not_active");
 			}
+		};
+		const tokens = marked.lexer(row.body);
+		marked.walkTokens(tokens, (token) => {
+			if (token.type === "link") resolvePath(token.href);
+			if (token.type === "html") htmlReferences(token);
+			// Inline tokens are walked separately; treating them here would double
+			// count the same link.
+			if (token.type !== "text" || ("tokens" in token && token.tokens?.length)) return;
+			wikiReferences(token);
 		});
 	}
 	return { resolved, unresolved };

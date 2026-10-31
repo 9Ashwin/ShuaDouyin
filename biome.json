@@ -1,10 +1,43 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
-	"files": { "includes": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "*.json", "!package-lock.json", "!dist"] },
-	"formatter": { "enabled": true, "indentStyle": "tab", "lineWidth": 120 },
+	"files": {
+		"includes": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "*.json", "!package-lock.json", "!dist"]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 120
+	},
 	"linter": {
 		"enabled": true,
-		"rules": { "recommended": true, "suspicious": { "noExplicitAny": "error" } }
+		"rules": {
+			"recommended": true,
+			"suspicious": {
+				"noExplicitAny": "error",
+				"noConfusingVoidType": "error",
+				"noDoubleEquals": "error"
+			},
+			"complexity": {
+				"noExcessiveCognitiveComplexity": {
+					"level": "warn",
+					"options": {
+						"maxAllowedComplexity": 25
+					}
+				}
+			},
+			"correctness": {
+				"useExhaustiveDependencies": "error"
+			},
+			"nursery": {
+				"noMisusedPromises": "error"
+			}
+		}
 	},
-	"assist": { "actions": { "source": { "organizeImports": "on" } } }
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	}
 }
