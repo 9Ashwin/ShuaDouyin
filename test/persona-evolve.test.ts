@@ -239,3 +239,41 @@ test("a missing timestamp does not make one session look like a long history", a
 	assert.equal(withoutTime.length, 2);
 	assert.equal(withoutTime[0]?.at, "");
 });
+
+test("a core setting written after the derived section survives a rewrite", () => {
+	// Order is what makes this dangerous. When the owner's core setting comes
+	// after the derived section, a rewrite that slices to the end of the document
+	// takes it with it — and the file still parses, so nothing looks wrong.
+	const original = [
+		"# 小抖",
+		"",
+		SECTION,
+		"",
+		"- 以前量出来的：一句就收",
+		"",
+		"## 身份与声音",
+		"",
+		"可爱、活泼，用户亲手写的核心设定。",
+		"",
+		"## 沟通",
+		"",
+		"- 先给结论。",
+		"",
+	].join("\n");
+	const applied = applySection(original, "- 新量出来的：两句");
+	assert.ok(applied.content.includes("可爱、活泼，用户亲手写的核心设定。"), "the core setting is untouched");
+	assert.ok(applied.content.includes("- 先给结论。"), "text after the section is untouched");
+	assert.ok(applied.content.includes("- 新量出来的：两句"));
+	assert.ok(!applied.content.includes("- 以前量出来的"), "the old derived line is gone");
+});
+
+test("a document with two derived sections replaces the first and leaves the second", () => {
+	// A duplicate could only get there by hand. Only the first is this command's
+	// to rewrite; the second is something the owner left there, and touching it
+	// would be rewriting a section twice over.
+	const original = ["# 小抖", "", SECTION, "", "- 第一段", "", SECTION, "", "- 第二段", ""].join("\n");
+	const applied = applySection(original, "- 新的");
+	assert.ok(applied.content.includes("- 新的"));
+	assert.ok(!applied.content.includes("- 第一段"), "the first derived section is replaced");
+	assert.ok(applied.content.includes("- 第二段"), "the second is left as the owner wrote it");
+});

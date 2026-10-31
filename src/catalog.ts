@@ -257,7 +257,7 @@ export const COMMANDS: CommandSpec[] = [
 			},
 		],
 		guidance:
-			"Reports the exact phrases that read as AI, with the reason each one does, plus the markers of a text scrubbed past natural — a comma chain, five equal-length sentences, one judgement sentence after another. Both directions matter: the catalog exists because deleting every tell is its own way of reading as written by a machine. The catalog is adapted from PenguinHarness's Chinese humanizer cues. Advice, not a gate: a flagged phrase kept on purpose is still a choice, and this never rewrites the text.",
+			"Reports the exact phrases that read as AI, with the reason each one does, plus the markers of a text scrubbed past natural — a comma chain, five equal-length sentences, one judgement sentence after another. Both directions matter: the catalog exists because deleting every tell is its own way of reading as written by a machine. The catalog is adapted from PenguinHarness's Chinese humanizer cues. Advice, not a gate: a flagged phrase kept on purpose is still a choice, and this never rewrites the text. It checks general readability only — passing it does not mean the text sounds like this bot, and it says nothing about whether the facts are right or whether the account is a person. Read the persona with persona show for the first question and check the facts yourself for the second.",
 		effect: "local",
 	},
 	{
