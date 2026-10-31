@@ -190,6 +190,13 @@ export function validate(operation: string, raw: Input): Input {
 			throw new CliError("invalid_argument", `--${key} must be an integer from ${minimum} to ${maximum}`);
 	}
 	switch (operation) {
+		case "video.favorites":
+			// The tab name is checked before Chrome starts. A page command that
+			// validated after connecting reported browser_not_running to a caller
+			// whose actual mistake was a typo in the tab name.
+			if (input.target && !["收藏", "喜欢", "观看历史", "稍后再看", "我的预约"].includes(input.target))
+				throw new CliError("invalid_argument", "--tab must be 收藏, 喜欢, 观看历史, 稍后再看 or 我的预约");
+			break;
 		case "search":
 		case "user.search":
 			if (!input.query?.trim() || input.query.length > 300)

@@ -301,9 +301,33 @@ function readProfileWorks() {
 	for (const anchor of anchors) {
 		const id = /\/video\/(\d+)/.exec(anchor.getAttribute("href") ?? "")?.[1];
 		if (!id || works.has(id)) continue;
-		works.set(id, { url: anchor.href, title: clean(anchor.textContent) });
+		// The card renders its caption twice — once under the tile and once in the
+		// hover layer — so the same sentence arrives repeated. Half of it is the
+		// whole of it.
+		const text = clean(anchor.textContent);
+		const half = text.slice(0, Math.floor(text.length / 2));
+		works.set(id, { url: anchor.href, title: half && text === half + half ? half : text });
 	}
 	return [...works.values()];
+}
+
+// The profile's own tabs are icon + count, with the label only in the parent's
+// text. `user-favorite-tab` exists in the markup but is 0x0 when the page is not
+// showing it, so a reader that trusts it clicks nothing.
+function profileTabPoint(label: string) {
+	const entries = [...document.querySelectorAll<HTMLElement>('[data-e2e="user-tab-icon"]')]
+		.map((icon) => ({ icon, label: clean(icon.parentElement?.textContent) }))
+		.filter((entry) => entry.label === label);
+	const entry = one(entries, `profile tab "${label}"`);
+	const box = entry.icon.getBoundingClientRect();
+	if (box.width === 0 || box.height === 0) fail("selector_changed", `The "${label}" tab is not laid out`);
+	return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };
+}
+
+// What a tab is showing once it has loaded. The grid arrives a moment after the
+// click, so a read taken immediately returns the work list that was there before.
+function tabWorks() {
+	return readProfileWorks();
 }
 
 let hoverPoint: { x: number; y: number } | null = null;
@@ -995,6 +1019,10 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 			// no work to guard, and the guard's refusal was reported as an identity
 			// mismatch rather than as a profile that had simply not rendered yet.
 			return { works: readProfileWorks().length };
+		case "profile.tab.point":
+			return profileTabPoint(args.target ?? "收藏");
+		case "profile.tab.works":
+			return { works: tabWorks() };
 		case "user.get": {
 			const id = userIdentity(args.user_id);
 			// The page nests two matches: an outer container that spans the whole profile

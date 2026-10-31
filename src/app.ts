@@ -28,6 +28,7 @@ import {
 import { inspectCreator } from "./operations/creator.ts";
 import { digest } from "./operations/digest.ts";
 import { pageFactsRead } from "./operations/facts.ts";
+import { readFavorites } from "./operations/favorites.ts";
 import { readImage } from "./operations/image-file.ts";
 import { readInbox } from "./operations/inbox.ts";
 import { resolveLink } from "./operations/links.ts";
@@ -739,6 +740,8 @@ export class App {
 				);
 			case "ai.ask":
 				return askDouyin(session, input, signal);
+			case "video.favorites":
+				return readFavorites(session, input, signal);
 			case "person.read":
 				input.user_id = resourceID(input.resource ?? "", "user");
 				return readPerson(session, input, signal);

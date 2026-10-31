@@ -126,7 +126,8 @@ dy video audio --seconds 10 --output a.webm
 
 ```bash
 dy video like --value true|false
-dy video favorite --value true|false
+dy video favorite --video-id <id> --value true|false   # 收藏/取消
+ dy video favorites                              # 读自己的收藏列表（--tab 可换 喜欢/观看历史/稍后再看）
 dy user follow --value true|false
 ```
 

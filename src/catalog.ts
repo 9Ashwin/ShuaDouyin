@@ -969,6 +969,21 @@ export const COMMANDS: CommandSpec[] = [
 			"Read video info first. --value false removes the like; an already matching state does not click the button. Image posts use their own controls and never fall back to the video button.",
 	},
 	{
+		id: "video.favorites",
+		description: "List the works this account has saved, from its own profile tab",
+		flags: [
+			{
+				key: "target",
+				name: "--tab <name>",
+				description: "收藏 (default), 喜欢, 观看历史, 稍后再看, 我的预约",
+				type: "string",
+			},
+		],
+		effect: "read",
+		guidance:
+			"Opens this account's own profile and reads the work grid on the named tab. Writing a favorite already existed; this is the read side, without which a caller adds to a collection it cannot see. Only works loaded in the window are listed and the page states no total, so complete is always false. A tab that comes back empty is empty, not still loading: the reader waits for the grid to change and then reports what is there.",
+	},
+	{
 		id: "video.favorite",
 		description: "Set the desired favorite state of the current video or image post",
 		flags: [{ ...video, required: true }, value],
