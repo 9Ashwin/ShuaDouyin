@@ -29,9 +29,26 @@ ShuaDouyin's executable is `dy`. Give it to an AI Agent that can run shell comma
 
 ## Quick start
 
+### Copy an installation prompt (recommended)
+
+Copy the entire block to an Agent that can run shell commands. Install the skill first, then let its instructions guide CLI installation and setup:
+
+```text
+Please install the dy skill:
+npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
+
+Read the installed dy skill and follow it to check and install the CLI,
+guide me through persona setup and Douyin login, and verify that it works.
+Preserve existing settings and memories. Only install, configure, and run read-only checks.
+```
+
+The skill includes CLI installation instructions. The Agent checks `dy --version` first and follows `references/setup.md` if the CLI is missing. The skill installer fetches its content from GitHub, so you do not need to open the repository and read the docs yourself. `dy` uses your existing Agent and needs no separate model API key. You log into Douyin yourself in local Chrome.
+
+### Manual installation
+
 You need **Node.js 22.19+, Chrome, and an Agent that can execute shell commands**.
 
-### 1. Install the CLI and skill
+#### 1. Install the CLI and skill
 
 ```bash
 npm install -g shuadouyin
@@ -41,7 +58,7 @@ dy skill install
 
 The npm package is `shuadouyin`; the command is `dy`. The published package includes the build output and uses your local Chrome, without downloading another browser. The skill installer detects supported Agent directories and preserves existing copies it does not manage.
 
-### 2. Create the workspace and log in
+#### 2. Create the workspace and log in
 
 ```bash
 dy init
@@ -50,9 +67,11 @@ dy auth login
 
 Scan the login QR code in the dedicated Chrome window. The default workspace is `~/.dy`; the browser login persists in `~/.dy/chrome`.
 
-### 3. Start a conversation with your Agent
+### Start using it
 
-> Use dy to help me set up a name, voice and boundaries. Then browse five works, pick one to inspect its frames and comments, and tell me what you observed. Only read this round; do not interact.
+After setup, send this to your Agent:
+
+> Use dy to browse five works, pick one to inspect its frames and comments, and tell me what you observed. Only read this round; do not interact. If no persona has been configured yet, guide me through setup first.
 
 You can also start with a specific task:
 
@@ -96,11 +115,9 @@ Updating or reinstalling the CLI continues to use the existing workspace. Use th
 
 ## Agent integration
 
-The [dy skill](skills/dy/SKILL.md) teaches Agents to use the tool, with topic-specific workflows in [references](skills/dy/references/). As an alternative to `dy skill install`, use the skills installer:
+For a first installation, use the [installation prompt above](#copy-an-installation-prompt-recommended). The following covers skill entry points and the usual calling sequence.
 
-```bash
-npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
-```
+The [dy skill](skills/dy/SKILL.md) teaches Agents to install and use the tool, with topic-specific workflows in [references](skills/dy/references/). If the CLI is already installed, you can also run `dy skill install` to connect the skill.
 
 Start each task by reading persona and relevant context:
 

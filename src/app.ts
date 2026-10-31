@@ -297,10 +297,17 @@ export class App {
 						// starting. Reading "the open round" after the fact would attach a
 						// long sweep to whichever round happened to be open when it ended.
 						const open = rounds(await this.store.events()).find((round) => round.status === "open");
+						// How long the page call took is measured here, where the clock is
+						// already running. Only failures carried a duration before, so
+						// "which command is slow" could be answered for the ones that broke
+						// and never for the ones that worked — which is the question a
+						// caller actually has.
+						const elapsed = Math.max(0, Math.round(performance.now() - started));
+						const browse = open ? { round_id: open.id, started_at: open.started_at, elapsed_ms: elapsed } : null;
 						const data =
-							open && result && typeof result === "object"
-								? { ...(result as object), _browse: { round_id: open.id, started_at: open.started_at } }
-								: result;
+							!open && !(result && typeof result === "object")
+								? result
+								: { ...(result as object), _elapsed_ms: elapsed, ...(browse ? { _browse: browse } : {}) };
 						await this.store.append(operation, data);
 					}
 					const notices = {

@@ -29,9 +29,26 @@ ShuaDouyin 的命令叫 `dy`。把它交给能执行 shell 的 AI Agent，就能
 
 ## 快速开始
 
+### 复制给 Agent 安装（推荐）
+
+把下面整段复制给能执行 shell 的 Agent，先装 skill，再由技能引导完成 CLI 安装与设置：
+
+```text
+请帮我安装 dy 技能：
+npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
+
+安装后读取 dy skill，按技能指引检查并安装 CLI，
+带我完成人格设置和抖音登录，并验证是否可用。
+已有配置和记忆请保留，这次只做安装、配置和只读验证。
+```
+
+skill 已包含 CLI 的安装指引，Agent 会先检查 `dy --version`，缺少 CLI 时按 `references/setup.md` 继续安装。技能安装器会从 GitHub 获取内容，你无需手动打开仓库查文档。`dy` 使用你现有的 Agent，不需要单独配置模型 API Key；抖音登录由你在本机 Chrome 中完成。
+
+### 自己安装
+
 准备好 **Node.js 22.19+、Chrome，以及一个能执行 shell 的 Agent**。
 
-### 1. 安装工具与 skill
+#### 1. 安装工具与 skill
 
 ```bash
 npm install -g shuadouyin
@@ -41,7 +58,7 @@ dy skill install
 
 npm 包叫 `shuadouyin`，可执行命令叫 `dy`。发布包已包含构建产物；使用本机 Chrome，不额外下载浏览器。`dy skill install` 会为已检测到的 Agent 安装技能，已有的非托管副本会保留。
 
-### 2. 建立工作区并登录
+#### 2. 建立工作区并登录
 
 ```bash
 dy init
@@ -50,9 +67,11 @@ dy auth login
 
 在打开的专用 Chrome 窗口里扫码登录。工作区默认位于 `~/.dy`，浏览器登录保存在 `~/.dy/chrome`，后续继续使用。
 
-### 3. 在你的 Agent 里开始聊
+### 开始使用
 
-> 用 dy 带我完成设置，先问我名字、语气和边界。然后刷 5 条，挑 1 条读画面和评论，告诉我看到了什么。这轮只看，不互动。
+设置好后，把这句话发给你的 Agent：
+
+> 用 dy 刷 5 条，挑 1 条读画面和评论，告诉我看到了什么。这轮只看，不互动。如果还没设置人格，先带我完成设置。
 
 也可以从具体任务开始：
 
@@ -96,11 +115,9 @@ dy auth login
 
 ## 给 Agent 接入
 
-[dy skill](skills/dy/SKILL.md) 负责教 Agent 如何使用工具，主题流程放在 [references](skills/dy/references/) 中。除了 `dy skill install`，也可以使用技能安装器：
+首次安装可以直接使用上面的[安装提示词](#复制给-agent-安装推荐)。下面是技能入口和日常调用顺序。
 
-```bash
-npx skills add https://github.com/9Ashwin/ShuaDouyin --skill dy
-```
+[dy skill](skills/dy/SKILL.md) 负责教 Agent 安装和使用工具，主题流程放在 [references](skills/dy/references/) 中。如果已经安装 CLI，也可以运行 `dy skill install` 接入技能。
 
 每次任务先读人格和相关上下文，再读页面：
 

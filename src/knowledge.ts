@@ -557,7 +557,44 @@ export class Knowledge {
 						remaining -= kept.length;
 						return { content: kept.join(""), truncated: kept.length < chars.length };
 					};
-					const documentViews = documents.map((document) => ({ ...document, ...excerpt(document.content, 8000) }));
+					// The persona is projected by section, not sliced from the front.
+					//
+					// Slicing is right for memories and wrong for a persona: identity and
+					// voice sit after the role introduction, so a budget that runs out
+					// silently removes the part the agent is supposed to sound like, and
+					// nothing in the output says it was cut. The projection returns whole
+					// sections and marks each one, and persona show uses the same function
+					// so two callers cannot disagree about what the persona is.
+					const documentViews = documents.map((document) => {
+						if (document.file !== "AGENTS.md") return { ...document, ...excerpt(document.content, 8000) };
+						const sectionBudget = Math.min(4000, remaining);
+						const surface = personaSurface(BOT_ID, document.file, document.revision, document.content, sectionBudget);
+						// A file with no sections is not a persona with nothing in it. The
+						// projection cannot read it, so the document is passed through as
+						// written and the flags say the shape was not understood — an empty
+						// content field would say the persona itself is empty.
+						if (surface.needs_interpretation) return { ...document, ...excerpt(document.content, 8000) };
+						const parts = surface.parts.filter((part) => part.complete);
+						// The remaining sections are reported, not dropped: a caller that sees
+						// complete:false knows to raise the budget or read the document.
+						remaining -= surface.characters;
+						return {
+							...document,
+							content: parts
+								.map((part) => `${part.name === "identity" ? "## 身份与声音" : part.name}\n\n${part.text}`)
+								.join("\n\n"),
+							truncated: !surface.complete,
+							persona: {
+								name: surface.name,
+								sections: surface.parts.map((part) => ({
+									name: part.name,
+									complete: part.complete,
+								})),
+								missing: surface.missing,
+								needs_interpretation: true,
+							},
+						};
+					});
 					const memoryViews = packed.items.map(({ hit, body, truncated }) => {
 						const row = hit.entry.row;
 						const short = (value: string, max: number) => Array.from(value).slice(0, max).join("");

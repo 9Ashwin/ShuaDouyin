@@ -111,3 +111,43 @@ test("a section present but empty counts as missing rather than as a blank voice
 	const result = personaSurface("bot", "AGENTS.md", "rev", doc, 6000);
 	assert.ok(result.missing.includes("identity"));
 });
+
+test("a core voice section past the old 8000-character cut still arrives", () => {
+	// context show sliced from the front at 8000 characters, so a long persona
+	// lost its voice section entirely and said nothing about it. The projection
+	// spends its budget section by section, so position no longer matters.
+	const filler = "这一节是角色介绍。".repeat(900);
+	const doc = ["# 阿鱼", "", "## 角色", "", filler, "", "## 身份与声音", "", "话多，爱笑。", ""].join("\n");
+	assert.ok(doc.indexOf("话多，爱笑。") > 8000, "the voice section really is past the old cut");
+	const result = personaSurface("bot", "AGENTS.md", "rev", doc, 100);
+	assert.equal(part(result, "identity")?.text, "话多，爱笑。");
+});
+
+test("a workspace with no persona document is not a persona of nothing", () => {
+	// The command refuses rather than returning an empty surface, because an agent
+	// handed an empty persona speaks in its own voice with no marker anywhere.
+	assert.equal(personaSurface("bot", "AGENTS.md", "", "", 6000).needs_interpretation, true);
+});
+
+test("a hand-edited revision is carried through untouched", () => {
+	// The revision is the caller's only way to notice an edit between reading and
+	// using, so it must be the file's own value and never recomputed here.
+	const one = personaSurface("bot", "AGENTS.md", "aaa", DOC, 6000);
+	const two = personaSurface("bot", "AGENTS.md", "bbb", DOC, 6000);
+	assert.equal(one.revision, "aaa");
+	assert.equal(two.revision, "bbb");
+	assert.equal(one.parts.length, two.parts.length, "the revision does not change the projection");
+});
+
+test("a free-form persona is passed through, not emptied", () => {
+	// The projection cannot read a file with no sections. Returning empty content
+	// would say the persona itself is empty, which is a different and wrong claim:
+	// the test that caught this had a file containing only "# My persona".
+	const free = "# My persona\n\nI like short sentences.";
+	const result = personaSurface("bot", "AGENTS.md", "rev", free, 6000);
+	assert.equal(result.needs_interpretation, true);
+	assert.equal(result.parts.length, 0);
+	// What the caller does with it is in knowledge.ts: it falls back to the raw
+	// document rather than to an empty string.
+	assert.equal(result.name, "My persona");
+});

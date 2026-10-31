@@ -247,6 +247,24 @@ export function roundSummary(events: Event[], id: string) {
 		inspected,
 		interacted: [...interacted].length,
 		elapsed_ms: elapsed,
+		// Time spent inside page calls, apart from how long the round was open. A
+		// round can be open for an hour with four minutes of browser work in it,
+		// and the difference is the caller thinking, not the tool being slow.
+		browser_ms: (() => {
+			let total = 0;
+			for (const event of inside) {
+				const data = record(event);
+				if (typeof data._elapsed_ms === "number" && data._elapsed_ms >= 0) total += data._elapsed_ms;
+			}
+			return total;
+		})(),
+		// The same work returned by more than one command. Counting it once is
+		// right for the budget and misleading for cost: reading a work twice is
+		// paid for twice.
+		duplicate_observations: (() => {
+			const all = observations(inside);
+			return all.length - uniqueObservations(all).length;
+		})(),
 		budget: round.budget,
 		// What the round is delivering against, and how far along it is. The
 		// qualified count comes from the checkpoints, so it says what the caller
