@@ -269,6 +269,11 @@ export class App {
 					// is attached here rather than deep inside each operation so no command
 					// has to remember, and so a command added later cannot forget.
 					const setup = await setupNotice(this.store.base);
+					// The persona note rides along the same way the setup question does.
+					// One place attaches it, so a command added later cannot forget, and
+					// it is advisory: a caller that has not read the persona yet must
+					// still be able to run the command that tells it to.
+					const persona = await personaNotice(this.store.base);
 					if (operation === "chat.read" && this.store.bot_id) {
 						if (!result || typeof result !== "object")
 							throw new CliError("state_corrupt", "Chat read did not return a conversation window");
@@ -298,7 +303,13 @@ export class App {
 								: result;
 						await this.store.append(operation, data);
 					}
-					return setup && result && typeof result === "object" ? { ...result, setup } : result;
+					const notices = {
+						...(setup ? { setup } : {}),
+						...(persona ? { persona } : {}),
+					};
+					return Object.keys(notices).length && result && typeof result === "object"
+						? { ...result, ...notices }
+						: result;
 				} catch (error) {
 					// Cancellation is the caller's choice and its outcome is not a
 					// finding about the command, so only a reached failure is recorded.
@@ -830,4 +841,46 @@ export async function setupNotice(base: string): Promise<object | null> {
 
 function publicBrowser(state: { headless: boolean; pid: number; started_at: string }) {
 	return { running: true, headless: state.headless, pid: state.pid, started_at: state.started_at };
+}
+
+/**
+ * Whether the persona was read recently enough to be speaking from it.
+ *
+ * The skill says to read the persona before the first reply of a session, and a
+ * session has no boundary a CLI can see. What it can see is the sequence of
+ * commands: a round of work starts when the persona is read, and any page
+ * command that happens long after a read — or before the first one ever — is a
+ * caller that is probably working without it.
+ *
+ * This is a note, not a gate. Refusing a read because the persona was not loaded
+ * would break the case that matters most: a caller that has not read it yet has
+ * to be able to run the command that tells it to.
+ */
+export async function personaNotice(base: string): Promise<object | null> {
+	const store = new Store(base);
+	const events = await store.events();
+	const reads = events.filter((event) => event.operation === "persona.read");
+	const last = reads.at(-1);
+	const current = await new Workspaces(base).document("AGENTS.md").catch(() => null);
+	if (!current) return null;
+	// A persona edited after the last read is stale evidence even if the read was
+	// a minute ago: the agent is holding an older version. This is checked before
+	// the clock, because "read recently" and "read the current file" are different
+	// facts and the second one is the one that matters.
+	const lastRevision = last?.data ? (last.data as { revision?: string }).revision : undefined;
+	const revisionChanged = !!lastRevision && lastRevision !== current.revision;
+	// Half an hour is a guess at "same sitting". A session can be longer, and
+	// saying so is better than a rule that silently expires mid-task.
+	const stale = !last || Date.now() - Date.parse(last.at) > 30 * 60_000;
+	if (!stale && !revisionChanged) return null;
+	return {
+		status: last ? (revisionChanged ? "changed_since_read" : "stale") : "never_read",
+		read: "Run `dy persona show` before speaking as this bot. It returns the name, voice and conduct sections with a complete flag per section.",
+		revision: current.revision,
+		why: last
+			? revisionChanged
+				? "The persona was edited after it was last read, so anything spoken from the earlier copy is out of date."
+				: "No persona read in this stretch of work. The bot's name and voice live in AGENTS.md, and replying without it means replying in the model's own voice."
+			: "The persona has never been read on this workspace. Without it the bot speaks as a generic assistant, and nothing in the output says the owner's setting was skipped.",
+	};
 }

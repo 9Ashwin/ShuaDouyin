@@ -393,7 +393,17 @@ export class Knowledge {
 				// text came from, or a caller has no way to tell an edit happened
 				// between reading the persona and using it.
 				const document = await this.workspaces.document("AGENTS.md");
-				return personaSurface(BOT_ID, "AGENTS.md", document.revision, document.content, input.budget ?? 6000);
+				const surface = personaSurface(BOT_ID, "AGENTS.md", document.revision, document.content, input.budget ?? 6000);
+				// The read is recorded. A command that runs afterwards can then tell
+				// whether the persona was picked up in this session, which is the
+				// difference between "the file is there" and "the agent has it". The
+				// record is the revision, so an edit between reading and using is
+				// visible rather than assumed away.
+				await new Store(this.workspaces.base).append("persona.read", {
+					revision: document.revision,
+					complete: surface.complete,
+				});
+				return surface;
 			}
 			case "persona.snapshot": {
 				const document = await this.workspaces.document("AGENTS.md");
