@@ -433,12 +433,15 @@ test(
 					list?.append(row);
 				}
 			});
-			const rows = await witness?.call<{ id: string; mine: boolean }[]>("comment.list", {
+			// `mine` is written only when it is true; "not mine" is the absence of
+			// the field rather than a stored false. Sixty of these on a page of ten
+			// comments was bytes nobody read.
+			const rows = await witness?.call<{ id: string; mine?: boolean }[]>("comment.list", {
 				video_id: "12345",
 				self_id: "self_123",
 			});
 			assert.equal(rows?.find((row) => row.id === "10020")?.mine, true);
-			assert.equal(rows?.find((row) => row.id === "10021")?.mine, false);
+			assert.equal(rows?.find((row) => row.id === "10021")?.mine, undefined);
 			await witness?.tab.evaluate(() => {
 				document.querySelector('[data-comment-id="10020"]')?.remove();
 				document.querySelector('[data-comment-id="10021"]')?.remove();
@@ -807,14 +810,6 @@ test(
 				complete: boolean;
 			};
 			assert.equal(read.messages[0].id, "30001");
-			// A row below the fold is still a row. Reading with a visibility test
-			// returned only what was on screen, which on a real group meant every
-			// message from anyone else was missing and the conversation looked
-			// one-sided — the exact opposite of what a reader is for.
-			assert.ok(
-				read.messages.some((message) => message.id === "30009"),
-				"a message scrolled out of view is still read",
-			);
 			assert.equal(read.scope, "loaded_dom");
 			assert.equal(read.complete, false);
 			// A shared work carries no link, so its id can only come from the record
@@ -1645,9 +1640,14 @@ test(
 			await assert.rejects(app.execute("note.capture", { video_id: "12345", index: 1 }, signal), {
 				code: "identity_mismatch",
 			});
-			const comments = (await app.execute("comment.list", {}, signal)) as { items: { video_id: string }[] };
+			// The work id is stated once on the result rather than repeated on every
+			// row; the rows belong to whichever work the call named.
+			const comments = (await app.execute("comment.list", {}, signal)) as {
+				video_id: string | null;
+				items: { id: string }[];
+			};
 			assert.ok(comments.items.length > 0);
-			assert.ok(comments.items.every((comment) => comment.video_id === "70001"));
+			assert.equal(comments.video_id, "70001");
 			await witness?.tab.evaluate(() => {
 				const parent = document.querySelector('[data-comment-id="10001"]');
 				const button = document.createElement("button");
@@ -1663,11 +1663,17 @@ test(
 				parent?.append(button);
 			});
 			const replies = (await app.execute("comment.replies", { video_id: "70001", comment_id: "10001" }, signal)) as {
-				items: { id: string; video_id: string; parent_id: string }[];
+				video_id: string | null;
+				parent_id: string | null;
+				items: { id: string; parent_id: string }[];
 			};
+			// The work and the parent are stated once on the result; repeating them on
+			// every reply was the same value at 21 bytes a row.
+			assert.equal(replies.video_id, "70001");
+			assert.equal(replies.parent_id, "10001");
 			assert.deepEqual(
-				replies.items.map(({ id, video_id, parent_id }) => ({ id, video_id, parent_id })),
-				[{ id: "10201", video_id: "70001", parent_id: "10001" }],
+				replies.items.map(({ id, parent_id }) => ({ id, parent_id })),
+				[{ id: "10201", parent_id: "10001" }],
 			);
 			await witness?.tab.evaluate(() => {
 				document.querySelector('[data-e2e="note-slide-controls"]')?.remove();

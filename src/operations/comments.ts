@@ -39,6 +39,11 @@ export async function listComments(session: Session, input: Input, signal: Abort
 	// with the label instead of having to trust it.
 	return {
 		...result,
+		// The work id is stated once here rather than on every row. It was on every
+		// row before, identical each time, which is 21 bytes times however many
+		// comments; a caller still needs to know which work these belong to, so it
+		// is stated once at the level that holds them.
+		video_id: input.video_id ?? null,
 		items: result.items.map((item) => {
 			const text = typeof item.text === "string" ? item.text : "";
 			const classified = classifyComment(text);

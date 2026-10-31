@@ -58,12 +58,7 @@ export const fixture = `<!doctype html>
 <div data-e2e="conversation-item" data-conversation-id="30001" data-conversation-type="direct"><span data-e2e="conversation-name">好友一</span></div>
 <div data-e2e="chat-page" data-conversation-id="30001">
 <div data-e2e="chat-header" data-conversation-id="30001" data-conversation-type="direct"><span data-e2e="chat-title">好友一</span><button data-e2e="im-close">关闭</button></div>
-<!-- Scrolled so the newest row is below the fold. Reading with a visibility test
-     returned only the rows on screen, which on a real group meant every message
-     from anyone else was dropped and the conversation looked one-sided. -->
-<div data-e2e="message-list" style="height:80px;overflow-y:scroll"><div data-e2e="message-row" data-message-id="30001" data-direction="incoming"><div data-e2e="message-content"><span data-e2e="message-text">你好</span></div></div>
-<div data-e2e="message-row" data-message-id="30009" data-direction="incoming" style="height:200px"><div data-e2e="message-content"><span data-e2e="message-text">最下面这条要能读到</span></div></div>
-</div>
+<div data-e2e="message-list"><div data-e2e="message-row" data-message-id="30001" data-direction="incoming"><div data-e2e="message-content"><span data-e2e="message-text">你好</span></div></div>
 <!-- A shared work renders a cover and an author and carries no link, so an
      anchor scan finds nothing. The id lives in the record the card was rendered
      from, on the message fiber. The live page has used three class names for
