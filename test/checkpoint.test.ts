@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { App } from "../src/app.ts";
-import { checkpointProgress, recordCheckpoint, roundRevision, startRound } from "../src/operations/browsing.ts";
+import {
+	checkpointProgress,
+	endRound,
+	recordCheckpoint,
+	roundRevision,
+	startRound,
+} from "../src/operations/browsing.ts";
 import { parseCheckpoint, qualifies } from "../src/operations/checkpoint.ts";
 import { parsePlan } from "../src/operations/plan.ts";
 import { Store } from "../src/store.ts";
@@ -245,10 +251,56 @@ test("the command refuses a closed round", async (t) => {
 	const app = new App({ state_dir: base });
 	await app.execute("init", { name: "ShuaDouyin" });
 	const round = (await startRound(new Store(base), { plan })) as { id: string };
-	await app.execute("browse.end", { resource: round.id, reason: "done" });
+	await app.execute("browse.end", { resource: round.id, reason: "done", outcome: "partial" });
 	const checkpoint = join(base, "cp.json");
 	await writeFile(checkpoint, JSON.stringify(batch()), "utf8");
 	await assert.rejects(app.execute("browse.checkpoint", { resource: round.id, text_file: checkpoint }), {
 		code: "state",
 	});
+});
+
+test("a round with a plan must state an outcome when it ends", async (t) => {
+	// Ending without saying is how "partial" quietly becomes "done" in whatever
+	// report reads the round later.
+	const base = await mkdtemp(join(tmpdir(), "dy-cp-"));
+	t.after(() => rm(base, { recursive: true, force: true }));
+	const store = new Store(base);
+	const round = (await startRound(store, { plan })) as { id: string };
+	await assert.rejects(endRound(store, round.id, "done"), { code: "invalid_argument" });
+});
+
+test("completed is refused when the checkpoints do not establish the target", async (t) => {
+	// A consistency check on the record, not a judgement about the candidates.
+	const base = await mkdtemp(join(tmpdir(), "dy-cp-"));
+	t.after(() => rm(base, { recursive: true, force: true }));
+	const store = new Store(base);
+	const round = (await startRound(store, { plan })) as { id: string };
+	await assert.rejects(endRound(store, round.id, "done", "completed"), (error: unknown) => {
+		const failure = error as { code: string; details: { qualified: number; target: number } };
+		assert.equal(failure.code, "invalid_argument");
+		assert.equal(failure.details.qualified, 0);
+		assert.equal(failure.details.target, 2);
+		return true;
+	});
+	const closed = (await endRound(store, round.id, "没找到", "partial")) as { outcome?: string };
+	assert.equal(closed.outcome, "partial");
+});
+
+test("an outcome outside the four is refused", async (t) => {
+	const base = await mkdtemp(join(tmpdir(), "dy-cp-"));
+	t.after(() => rm(base, { recursive: true, force: true }));
+	const store = new Store(base);
+	const round = (await startRound(store, {})) as { id: string };
+	await assert.rejects(endRound(store, round.id, "x", "done"), { code: "invalid_argument" });
+});
+
+test("a round with no plan may end without an outcome", async (t) => {
+	// Old callers keep working: a round that only carried a budget had no
+	// delivery condition to report against.
+	const base = await mkdtemp(join(tmpdir(), "dy-cp-"));
+	t.after(() => rm(base, { recursive: true, force: true }));
+	const store = new Store(base);
+	const round = (await startRound(store, {})) as { id: string };
+	const closed = (await endRound(store, round.id, "done")) as { outcome?: string };
+	assert.equal(closed.outcome, undefined);
 });

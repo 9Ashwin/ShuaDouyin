@@ -223,7 +223,7 @@ export class Knowledge {
 				});
 			case "browse.end":
 				return this.workspaces.lock(() =>
-					endRound(new Store(this.workspaces.base), input.resource ?? "", input.reason ?? ""),
+					endRound(new Store(this.workspaces.base), input.resource ?? "", input.reason ?? "", input.outcome),
 				);
 			case "browse.watch":
 				return this.workspaces.lock(() =>

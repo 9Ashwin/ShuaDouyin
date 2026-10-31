@@ -548,9 +548,18 @@ export const COMMANDS: CommandSpec[] = [
 		id: "browse.end",
 		description: "Close a browsing round and keep its summary",
 		argument: { key: "resource", name: "round-id", description: "Round ID from browse start" },
-		flags: [{ key: "reason", name: "--reason <text>", description: "Why the round stopped", type: "string" }],
+		flags: [
+			{ key: "reason", name: "--reason <text>", description: "Why the round stopped", type: "string" },
+			{
+				key: "outcome",
+				name: "--outcome <kind>",
+				description: "completed | partial | blocked | cancelled",
+				type: "string",
+			},
+		],
 		effect: "local",
-		guidance: "Closing twice is harmless; the first close wins and the second reports already_closed.",
+		guidance:
+			"Closing twice is harmless; the first close wins and the second reports already_closed. A round started with a plan must state an outcome, because a round with a delivery condition that ends without one turns partial into done in whatever report reads it later. completed is refused unless the checkpoints actually establish the target count; that is a consistency check on the record, not a judgement about whether the candidates are any good.",
 	},
 	{
 		id: "browse.watch",

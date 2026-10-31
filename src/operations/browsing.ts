@@ -19,6 +19,9 @@ export interface Round {
 	goal: string | null;
 	status: "open" | "closed";
 	end_reason: string | null;
+	// How the round ended, when the caller said. Open/closed is the mechanical
+	// state; this is what the round delivered.
+	outcome?: Outcome;
 	// What this round is for, when the caller stated it. Absent for rounds that
 	// only carried a budget, which is every round started before this existed.
 	plan?: Plan;
@@ -101,21 +104,50 @@ export async function startRound(
 	};
 }
 
-export async function endRound(store: Store, id: string, reason: string) {
+export type Outcome = "completed" | "partial" | "blocked" | "cancelled";
+
+const OUTCOMES: Outcome[] = ["completed", "partial", "blocked", "cancelled"];
+
+export async function endRound(store: Store, id: string, reason: string, outcome?: string) {
 	const events = await store.events();
 	const round = rounds(events).find((entry) => entry.id === id);
 	if (!round) throw new CliError("not_found", "No browsing round with that ID");
+	// Closing twice keeps the first result: the second call describes a round that
+	// has already ended, and rewriting its outcome would lose what actually
+	// happened.
 	if (round.status === "closed") return { ...round, already_closed: true };
+	if (outcome !== undefined && !OUTCOMES.includes(outcome as Outcome))
+		throw new CliError("invalid_argument", `--outcome must be ${OUTCOMES.join(", ")}`);
+	// A round with a plan has a delivery condition, so ending it has to say
+	// whether that condition was met. Ending without saying is how "partial"
+	// quietly becomes "done" in a report later.
+	if (round.plan && outcome === undefined)
+		throw new CliError("invalid_argument", "This round has a plan; state an --outcome", {
+			hint: `One of ${OUTCOMES.join(", ")}. completed means the target was reached, not that time ran out.`,
+		});
 	const summary = roundSummary(events, id);
 	// The candidates are computed before the closing event is written, so they
 	// describe the round rather than the act of closing it.
 	const candidates = roundCandidates(events, id);
-	await store.append("browse.end", { id, reason, summary });
+	if (outcome === "completed" && round.plan) {
+		// Recording consistency, not semantic truth: the tool cannot judge whether
+		// a candidate is good, only whether the count it was told matches what the
+		// checkpoints established.
+		const checkpoints = storedCheckpoints(events, id).map((entry) => entry.checkpoint);
+		const qualified = checkpointProgress(checkpoints, round).qualified;
+		if (qualified < round.plan.deliverable.target)
+			throw new CliError("invalid_argument", "The round did not reach its delivery target", {
+				hint: "Use --outcome partial and say what is missing.",
+				details: { qualified, target: round.plan.deliverable.target },
+			});
+	}
+	await store.append("browse.end", { id, reason, summary, ...(outcome ? { outcome } : {}) });
 	return {
 		...round,
 		status: "closed",
 		ended_at: new Date().toISOString(),
 		end_reason: reason,
+		...(outcome ? { outcome } : {}),
 		summary,
 		...(candidates ? { candidates: candidates.candidates, candidate_scope: candidates.limitations } : {}),
 	};
@@ -149,6 +181,7 @@ export function rounds(events: Event[]): Round[] {
 			if (!round) continue;
 			round.status = "closed";
 			round.ended_at = event.at;
+			if (typeof data.outcome === "string") round.outcome = data.outcome as Outcome;
 			round.end_reason = typeof data.reason === "string" ? data.reason : "";
 		}
 	}
@@ -215,6 +248,37 @@ export function roundSummary(events: Event[], id: string) {
 		interacted: [...interacted].length,
 		elapsed_ms: elapsed,
 		budget: round.budget,
+		// What the round is delivering against, and how far along it is. The
+		// qualified count comes from the checkpoints, so it says what the caller
+		// established rather than what it was asked to find.
+		progress: (() => {
+			const checkpoints = storedCheckpoints(events, id).map((entry) => entry.checkpoint);
+			const counted = checkpointProgress(checkpoints, round);
+			const target = round.plan?.deliverable.target ?? null;
+			return {
+				target,
+				qualified: counted.qualified,
+				shortlisted: counted.shortlisted,
+				batches: counted.batches,
+				no_progress_batches: counted.no_progress_batches,
+				route_changes: counted.route_changes,
+				routes: counted.routes,
+				next: counted.next,
+				remaining: target === null ? null : Math.max(0, target - counted.qualified),
+				...(round.plan
+					? {
+							advice:
+								target !== null && counted.qualified >= target
+									? "target_reached"
+									: counted.no_progress_batches >= round.plan.policy.max_no_progress_batches
+										? "no_progress"
+										: counted.route_changes >= round.plan.policy.max_route_changes
+											? "change_route"
+											: "continue",
+						}
+					: {}),
+			};
+		})(),
 		over_budget: overBudget,
 		suggest: overBudget ? "The budget is spent; this is a reasonable place to close the round." : null,
 		skip_reasons: skipped.reduce<Record<string, number>>((counts, entry) => {
