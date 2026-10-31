@@ -322,6 +322,22 @@ export const COMMANDS: CommandSpec[] = [
 		effect: "local",
 	},
 	{
+		id: "persona.show",
+		description: "Read the persona a caller needs before it speaks, projected by section",
+		flags: [
+			{
+				key: "budget",
+				name: "--budget <characters>",
+				description: "Room for the persona sections",
+				type: "number",
+				default: 6000,
+			},
+		],
+		effect: "local",
+		guidance:
+			"Returns the name, identity and voice sections, and the growth and communication rules, each with its own complete flag. Unlike context show, the budget is spent section by section and never cuts a section in half: a section that does not fit comes back empty with complete:false, because half a voice section reads like a whole one. The revision identifies the exact file this was read from. This is the persona as written, not proof an agent followed it — a host that builds its own request can guarantee the text reaches the model, and a skill-only caller cannot.",
+	},
+	{
 		id: "persona.evolve",
 		description: "Rewrite the persona's derived voice section from what this account actually wrote",
 		flags: [],
@@ -930,9 +946,12 @@ export const COMMANDS: CommandSpec[] = [
 			{
 				key: "frames",
 				name: "--frames <count>",
-				description: "Positions to sample: 0 for none, 1, or 3 (default 3); 0 skips all seeking",
+				// No default. A default of 3 overrode the duration-aware choice, so
+				// every work got three frames whether it was thirty seconds or twenty
+				// minutes — which is the thing sampling by duration exists to avoid.
+				// Omitted means "choose from the duration"; 0 means none.
+				description: "Frames to sample; omit to choose by duration, 0 for none",
 				type: "number",
-				default: 3,
 			},
 			{ key: "limit", name: "--limit <count>", description: "Comments to read (default 8)", type: "number" },
 			{ key: "output", name: "--output <directory>", description: "Frame output directory", type: "string" },

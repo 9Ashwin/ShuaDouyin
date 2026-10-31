@@ -395,6 +395,7 @@ dy social goalpause <goal-id>
 dy growth review [--since --limit]   # 按顺序列出待处理的活动
 dy growth event --event-id <id>      # 读某一条的来源
 dy growth ack --event-id <id>        # 处理完再确认
+dy persona show                      # 说开口之前要读的那几段：名字、声音、准则
 dy persona evolve                    # 人格按自己写过的东西长一节
 dy persona evolve --dry-run          # 只看会长成什么样
 dy persona migrate                   # 老工作区的人格补上生长一节
@@ -404,6 +405,10 @@ dy persona rollback <version>        # 回到某一版
 ```
 
 ## 人格自己长
+
+**开口之前用 `persona show`，不要用 `context show` 读人格。** 后者按字符预算从头截，而身份和声音两段在角色介绍之后——预算不够时会静静地把「你该用什么语气」切掉，输出里没有任何东西说明它被切了。`persona show` 按段取，每段带 `complete`。某段是 `complete: false` 且正文为空，说明它没放下，不是这段不存在。
+
+`persona show` 返回的 `missing` 是真的没有那一段。`voice` 通常在 `missing` 里，因为它由 `persona evolve` 量出来才会出现——不要因为缺它就自己编一个语气。
 
 `persona evolve` 读这个账号真正发出去的评论，量长度、标点、表情、问句、称呼、惯用开头，写进 `AGENTS.md` 的「长出来的声音」一节。每一条都带你自己的数字，比如「一两句就收（自己发的评论中位数 9 字，23 条样本）」。
 

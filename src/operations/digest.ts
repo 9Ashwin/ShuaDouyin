@@ -115,7 +115,9 @@ export async function digest(
 		}
 		if (slides.length) limitations.push("Every page of the image post was captured in order.");
 	} else if (input.frames !== 0 && initial.video) {
-		const positions = samplePositions(duration ?? 0, input.frames ?? 3);
+		// Passing undefined is what lets the duration decide. `?? 3` here was the
+		// same override as the flag default, one layer further in.
+		const positions = samplePositions(duration ?? 0, input.frames);
 		if (!positions.length)
 			limitations.push(
 				duration ? `${Math.round(duration)}s is short enough to read in one pass` : "This work reports no duration",

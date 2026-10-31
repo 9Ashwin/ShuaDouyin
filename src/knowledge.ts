@@ -25,6 +25,7 @@ import { acknowledged, diagnostics, splitByFix } from "./operations/diagnostics.
 import { addGoal, discover, pauseGoal } from "./operations/discover.ts";
 import { keepFindings } from "./operations/learn.ts";
 import { evolvePersona, migratePersonaDocument, personaSection, presetOf } from "./operations/persona-evolve.ts";
+import { personaSurface } from "./operations/persona-surface.ts";
 import { resetApply, resetPlan } from "./operations/reset.ts";
 import { parseSources, signals } from "./operations/signals.ts";
 import {
@@ -352,6 +353,13 @@ export class Knowledge {
 			}
 			case "learn.findings":
 				return this.workspaces.document("lessons.md");
+			case "persona.show": {
+				// Read-only and uncached: the revision returned has to be the one the
+				// text came from, or a caller has no way to tell an edit happened
+				// between reading the persona and using it.
+				const document = await this.workspaces.document("AGENTS.md");
+				return personaSurface(BOT_ID, "AGENTS.md", document.revision, document.content, input.budget ?? 6000);
+			}
 			case "persona.snapshot": {
 				const document = await this.workspaces.document("AGENTS.md");
 				const version = await this.workspaces.snapshot("AGENTS.md", document.content);
