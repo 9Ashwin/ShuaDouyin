@@ -146,11 +146,21 @@ export function currentPlayer(): HTMLVideoElement {
 // work whose panel was never opened: the feed keeps the rows of an earlier work
 // attached. What is being asked here is whether a panel is showing, so the panel
 // itself is measured — the list container, by its own size.
+//
+// "Has a size" is not enough, and that was the second version of the same
+// mistake. With the panel closed the list does not disappear: it collapses into
+// a 32px-wide strip of rows inside the icon rail, laid out and scrollable. A
+// width-and-height test called that open, so `comment list` skipped opening the
+// panel, read zero rows from the strip, and `comment post` looked for a composer
+// that was never shown. A panel a person can read is a meaningful fraction of the
+// window; a strip is not.
+const PANEL_WIDTH = 200;
+
 export function commentPanel(): { open: boolean; rows: number; root: HTMLElement | null } {
 	const roots = findRendered<HTMLElement>(document, '[data-e2e="comment-list"],.comment-list-container');
 	const open = roots.filter((element) => {
 		const box = element.getBoundingClientRect();
-		return box.width > 0 && box.height > 0;
+		return box.width >= PANEL_WIDTH && box.height > 0;
 	});
 	const root = open[0] ?? null;
 	const rows = root ? root.querySelectorAll('[data-e2e="comment-item"]').length : 0;

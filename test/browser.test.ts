@@ -226,6 +226,24 @@ test(
 			}
 		});
 
+		await t.test("a collapsed comment strip is not an open panel", async () => {
+			// With the panel closed the list is still in the document and still has a
+			// size — a 32px strip inside the icon rail. Asking "does it have a size"
+			// answered yes, so `comment list` skipped opening the panel and read zero
+			// rows from the strip, and `comment post` looked for a composer that had
+			// never been shown. Opening is decided by a width a reader could use.
+			await openWork("12345");
+			await witness?.tab.evaluate(() => {
+				const list = document.querySelector('[data-e2e="comment-list"]');
+				if (list instanceof HTMLElement) list.style.cssText = "width:32px;max-height:160px;overflow:auto";
+			});
+			const panel = (await witness?.call("comment.panel", {})) as { open: boolean };
+			assert.equal(panel.open, false);
+			await openWork("12345");
+			const open = (await witness?.call("comment.panel", {})) as { open: boolean };
+			assert.equal(open.open, true);
+		});
+
 		await t.test("two connections to one workspace share the tab and attribute operation facts", async () => {
 			// One installation, one browser session: a second connection reads the
 			// same tab and writes to the same log, and the lease still keeps them

@@ -50,6 +50,10 @@ export const fixture = `<!doctype html>
 <section id="live" data-e2e="feed-live" style="display:none">
 <a id="live-link" href="/user/live_host_one"><span id="live-title">直播中</span></a>
 </section>
+<!-- The list is always in the document. On the live feed a closed panel leaves
+     it collapsed to a 32px strip inside the icon rail, which is the shape that
+     made "it has a size" the wrong test for "the panel is open". The fixture
+     reproduces that with a class the tests toggle. -->
 <div data-e2e="comment-list" style="max-height:160px;overflow:auto">
 <div data-e2e="comment-item" data-comment-id="10001"><a data-e2e="comment-author" href="/user/guest_456">路人</a><span data-e2e="comment-content">原始评论</span><button data-e2e="comment-reply">回复</button></div>
 <!-- The live page carries no comment-content attribute and uses per-build
