@@ -244,6 +244,44 @@ test(
 			assert.equal(open.open, true);
 		});
 
+		await t.test("the publish icon is found by its shape, not by a per-build class", async () => {
+			// The live page's publish control carries no data-e2e marker, no label and
+			// no stable class: just a span holding a 0 0 36 36 svg with two paths. The
+			// emoji, image and mention icons beside it share the viewBox and carry one
+			// path. The fixture's button had a marker, which is why no test noticed
+			// when the class this relied on changed.
+			await openWork("12345");
+			await witness?.tab.evaluate(() => {
+				const button = document.querySelector('[data-e2e="comment-post"]');
+				if (!(button instanceof HTMLElement)) return;
+				const span = document.createElement("span");
+				const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+				svg.setAttribute("viewBox", "0 0 36 36");
+				for (const d of ["M0 0h36v36H0z", "M6 6h24v24H6z"]) {
+					const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+					path.setAttribute("d", d);
+					svg.append(path);
+				}
+				span.append(svg);
+				// The live icon is 36x36 once the composer holds text; find() keeps only
+				// elements that are laid out and on screen.
+				span.style.cssText = "display:inline-block;width:36px;height:36px";
+				svg.style.cssText = "width:36px;height:36px;display:block";
+				span.style.padding = "4px";
+				// Keep the handler, drop every attribute that would identify it.
+				span.onclick = (event) => button.onclick?.(event);
+				button.removeAttribute("data-e2e");
+				button.replaceWith(span);
+			});
+			const posted = (await app.execute(
+				"comment.post",
+				{ video_id: "12345", text: "形状认出来的发布", request_id: `${run}-shape-publish` },
+				signal,
+			)) as { confirmed: boolean };
+			assert.equal(posted.confirmed, true);
+			await openWork("12345");
+		});
+
 		await t.test("two connections to one workspace share the tab and attribute operation facts", async () => {
 			// One installation, one browser session: a second connection reads the
 			// same tab and writes to the same log, and the lease still keeps them

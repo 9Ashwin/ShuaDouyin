@@ -365,13 +365,22 @@ export function prepareWrite(
 	return { selector: `[data-douyin-cli-editor="${args.token}"]`, before };
 }
 
-// The publish icon: span.wchsYBpK wrapping one 0 0 36 36 svg with two paths.
-// The emoji and image icons next to it use the same viewBox but carry one path,
-// so the count is what distinguishes them.
+// The publish icon: one 0 0 36 36 svg with two paths, inside a span that has no
+// text of its own.
+//
+// The class used to identify it (`wchsYBpK`) is per-build and has since changed
+// to something else, which is why the send control was "found 0" on a page whose
+// publish button was right there. What did not change is the shape: the emoji,
+// image and mention icons in the same row share the viewBox and carry one path,
+// so the two-path icon is the publish action.
+//
+// It is 0x0 while the composer is empty: the page only shows it once there is
+// something to publish. That is why the control is looked up in `armWrite`, which
+// runs after the text is typed, rather than in `prepareWrite`, which runs before —
+// measuring it there found nothing to press on a page that was about to be ready.
 export function publishIcon(element: HTMLElement): boolean {
-	const holder = element.closest<HTMLElement>("span.wchsYBpK") ?? element;
-	if (!holder.classList.contains("wchsYBpK") || clean(holder.textContent)) return false;
-	const svgs = holder.querySelectorAll("svg");
+	if (clean(element.textContent)) return false;
+	const svgs = element.querySelectorAll("svg");
 	if (svgs.length !== 1) return false;
 	if ((svgs[0].getAttribute("viewBox") ?? "").replace(/\s+/g, " ").trim() !== "0 0 36 36") return false;
 	return svgs[0].querySelectorAll("path").length === 2;
@@ -531,14 +540,18 @@ export function armWrite(args: Args): Point {
 		if (!matches(state.editor)) fail("draft_conflict", "Draft changed before send");
 	};
 	check();
-	// On the live page the publish control is an unlabelled icon, not a button:
-	// span.wchsYBpK holding a 0 0 36 36 svg with two paths. The sibling icons
-	// (emoji, image) share the viewBox, so the two-path shape is what tells them
-	// apart. Labelled and data-e2e controls are still accepted first.
+	// On the live page the publish control is an unlabelled icon, not a button: a
+	// span holding a 0 0 36 36 svg with two paths. The sibling icons (emoji,
+	// image, mention) share the viewBox, so the two-path shape is what tells them
+	// apart. Labelled and data-e2e controls are still accepted first. The span is
+	// selected by tag because the only class it carried was per-build.
 	const selectors =
 		args.action === "chat.send"
 			? '.e2e-send-msg-btn,[data-e2e="send-msg-btn"]'
-			: '[data-e2e="comment-post"],[data-e2e="comment-submit"],[data-e2e="comment-publish"],[aria-label="发布"],[aria-label="发表评论"],span.wchsYBpK';
+			: // `span` rather than the old per-build class: what identifies the publish
+				// icon is its shape (see publishIcon), and the class it used to carry is
+				// gone from the page.
+				'[data-e2e="comment-post"],[data-e2e="comment-submit"],[data-e2e="comment-publish"],[aria-label="发布"],[aria-label="发表评论"],span';
 	// Only a control whose own label or shape identifies it as the publish
 	// action counts. A bare button tag would also match 回复 and 分享, which sit
 	// next to the composer and would send the wrong thing.
