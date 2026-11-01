@@ -97,7 +97,7 @@ import {
 	verifyChatMedia,
 } from "./readers.ts";
 import { openSearchFilters, prepareSearchFilter, searchFilterState } from "./search.ts";
-import { commentPanel, currentPlayer, currentSlideRoot } from "./slide.ts";
+import { commentPanel, currentPlayer, currentSlide, currentSlideRoot } from "./slide.ts";
 import { armSteer, cleanupSteer, prepareSteer, steerOpener, steerOutcome } from "./steer.ts";
 
 function checkChatDraft(): void {
@@ -340,6 +340,61 @@ async function execute(operation: string, args: Args & { seconds: number }) {
 	switch (operation) {
 		case "status":
 			return readPageState(args.include_text);
+		case "feed.viewport": {
+			// Where a wheel gesture has to land to move the feed.
+			//
+			// The feed's scroller only consumes a wheel that originates inside the
+			// player; one over the page chrome scrolls nothing. The box reported here
+			// is the current slide's, so the pointer goes to the work being looked at
+			// rather than to whatever the feed happens to have next to it — and null
+			// on a page that has no slide at all, which is the signal to fall back to
+			// the arrow instead of wheeling at an empty coordinate.
+			guardPage();
+			const slide = currentSlide();
+			if (!slide) return null;
+			const box = slide.root.getBoundingClientRect();
+			if (!(box.width > 0 && box.height > 0)) return null;
+			// The wheel has to land inside the window, on the slide. A slide is not
+			// always wholly on screen — a feed layout after a comment panel closed, or
+			// a short work centred in a tall window — so the point is the centre of the
+			// part that is visible, and the distance is how far the visible part
+			// reaches. A gesture measured against the slide's own box would start
+			// outside the window and scroll the page chrome instead.
+			const left = Math.max(0, box.left);
+			const top = Math.max(0, box.top);
+			const right = Math.min(innerWidth, box.right);
+			const bottom = Math.min(innerHeight, box.bottom);
+			if (right <= left || bottom <= top) return null;
+			return {
+				x: Math.round(left + (right - left) / 2),
+				y: Math.round(top + (bottom - top) / 2),
+				distance: Math.round(Math.max(120, (bottom - top) * 0.9)),
+			};
+		}
+		case "profile.work.open": {
+			// Opening one of a profile's works the way a person does: press its tile.
+			//
+			// Navigating to `/video/<id>` instead lands on the work's own page, which is
+			// a different surface — its like and favourite controls are in a bar under
+			// the work, its AI entry does not exist, its feed arrows are laid out far
+			// outside the window. Pressing the tile opens the overlay the profile
+			// already uses: the URL gains `modal_id`, the feed stays behind it, and
+			// every read that works on the feed works there too.
+			//
+			// The tile is identified by the id in its href and by being a tile, not by
+			// its position: the profile also ends with a strip of recommended works,
+			// and those are links to /video/ as well.
+			guardPage();
+			const wanted = args.video_id ?? "";
+			const tile = [...document.querySelectorAll<HTMLAnchorElement>('a[href*="/video/"]')].find((anchor) => {
+				if (!wanted || !new RegExp(`/video/${wanted}(?:$|[?#])`).test(anchor.getAttribute("href") ?? "")) return false;
+				const box = anchor.getBoundingClientRect();
+				return box.width >= 80 && box.height >= 80;
+			});
+			if (!tile) fail("selector_changed", "The profile does not show that work", "Scroll the grid until it appears.");
+			tile.scrollIntoView({ block: "center", inline: "nearest" });
+			return point(tile, args.token);
+		}
 		case "auth.status": {
 			const state = readPageState();
 			return {

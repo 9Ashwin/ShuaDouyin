@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Session } from "../browser.ts";
 import { CliError } from "../errors.ts";
 import { listComments } from "./comments.ts";
@@ -101,6 +102,43 @@ async function settleWork(session: Session, id: string, signal: AbortSignal): Pr
 	return false;
 }
 
+// Back to the profile whose grid the next work comes from.
+//
+// Only navigates when the page is somewhere else, so the first work costs
+// nothing and a read that never left stays put. The profile renders its grid
+// after the header, and the caller waits for works right after this.
+async function backToProfile(session: Session, person: string, signal: AbortSignal): Promise<void> {
+	const state = await session.status();
+	if (state.url && /\/user\/[^/?#]+/.test(state.url) && state.page_kind === "profile") return;
+	await navigate(session, `https://www.douyin.com/user/${person}`, "profile", signal);
+	await waitForWorks(session, signal);
+}
+
+// Opening one of the person's works from their profile grid.
+//
+// The tile is pressed, which opens the overlay the profile itself uses — the
+// feed stays behind it and every read that works on the feed works there.
+//
+// There is deliberately no fallback to `/video/<id>`. That route is the work's
+// own page: its controls are laid out differently, it has no way back to the
+// feed, and a read that visits three works would leave the caller three pages
+// away from where they started. A tile that is not on the grid is reported as
+// such, and the caller decides what to do about it.
+async function openProfileWork(session: Session, id: string): Promise<boolean> {
+	const point = await session
+		.call<{ already?: boolean } & Parameters<Session["click"]>[0]>("profile.work.open", {
+			video_id: id,
+			token: randomUUID(),
+		})
+		.catch((error: unknown) => {
+			if (error instanceof CliError && error.code === "selector_changed") return null;
+			throw error;
+		});
+	if (!point) return false;
+	await session.click(point);
+	return true;
+}
+
 // Waiting for the grid is what separates "this profile has no works" from "the
 // works have not rendered yet", and only the page can answer it.
 async function waitForWorks(session: Session, signal: AbortSignal): Promise<void> {
@@ -147,10 +185,24 @@ export async function readPerson(session: Session, input: Input, signal: AbortSi
 		// Each work has to be opened first: reading comments is guarded on being on
 		// a work page, and jumping there from the profile reported an identity
 		// mismatch rather than the comment list.
+		//
+		// It is opened by pressing its tile, not by navigating to `/video/<id>`.
+		// That route is the work's own page, a different surface with a different
+		// control layout and no way back to the feed; a profile read that visited
+		// three works left the caller three pages away from where they started.
+		// The tile opens the overlay instead, which behaves like the feed.
+		// The grid is only there while the profile is; the overlay replaces it. So
+		// every work but the first has to come back to the profile before its tile
+		// can be pressed, which is exactly what a person does when they close one
+		// work and open another from the grid.
+		await backToProfile(session, person, signal);
+		if (!(await openProfileWork(session, work.id))) {
+			limits.push(`Work ${work.id} was not on the profile grid, so it was not opened.`);
+			continue;
+		}
 		// One work at a time, and a failure on one does not lose the others. The
 		// first version let a single unreadable work end the whole read, which turned
 		// a partial answer into no answer.
-		await navigate(session, `https://www.douyin.com/video/${work.id}`, "video", signal);
 		// The player reports its work a moment after the route changes. Reading
 		// comments starts with an identity check, so a read taken in that gap failed
 		// as "current work identity is missing" on a page that was about to be fine.

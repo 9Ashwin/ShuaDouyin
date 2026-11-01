@@ -96,9 +96,31 @@ test(
 			assert.equal(opened.video.id, "12345");
 			const status = (await app.execute("video.info", {}, signal)) as { video: { id: string } };
 			assert.equal(status.video.id, "12345");
-			const next = (await app.execute("feed.next", {}, signal)) as { video: { id: string } };
-			assert.equal(next.video.id, "67890");
-			await app.execute("feed.previous", {}, signal);
+			// Coming back from the work page is a full navigation, so the fixture's
+			// player is unpinned after it; the move still has to work there.
+			const next = (await app.execute("feed.next", {}, signal)) as {
+				video: { id: string };
+				recovered_from?: string;
+			};
+			assert.equal(next.recovered_from, "https://www.douyin.com/video/12345");
+			assert.notEqual(next.video.id, "12345");
+			await app.execute("feed.open", {}, signal);
+		});
+
+		await t.test("moving the feed from a work page comes back to the feed and says so", async () => {
+			// 90001 is the fixture's standalone work page: the same controls, but the
+			// feed arrows are not on screen there, exactly as on the live site. Asking
+			// the feed to advance from it used to wait eight seconds and fail, and the
+			// next command did the same thing from the same page.
+			const opened = (await openWork("90001")) as { video: { id: string } };
+			assert.equal(opened.video.id, "90001");
+			const next = (await app.execute("feed.next", {}, signal)) as {
+				video: { id: string };
+				recovered_from?: string;
+			};
+			assert.equal(next.recovered_from, "https://www.douyin.com/video/90001");
+			assert.ok(next.video.id);
+			assert.notEqual(next.video.id, "90001");
 		});
 
 		await t.test("a seek moves playback and refuses a position past the end", async () => {
@@ -120,13 +142,19 @@ test(
 
 		await t.test("a press swallowed on an unchanged slide is retried once", async () => {
 			await openWork("12345");
-			// The first press is ignored and the page stays put. Retrying is safe
+			// On the feed, which is the only place a move is meaningful: coming back
+			// from a work page reloads it, and a fixture flag does not survive that.
+			await app.execute("feed.open", {}, signal);
+			// The first gesture is ignored and the page stays put; retrying is safe
 			// here precisely because the page is still on the work it started from.
 			await witness?.tab.evaluate(() => Reflect.set(window, "swallowOnce", true));
+			const before = (await app.execute("video.info", {}, signal)) as { video: { id: string } };
 			const next = (await app.execute("feed.next", {}, signal)) as { video: { id: string } };
-			assert.equal(next.video.id, "67890");
+			assert.notEqual(next.video.id, before.video.id);
 			assert.equal(await witness?.tab.evaluate("window.swallowed"), 1);
-			await app.execute("feed.previous", {}, signal);
+			// The flag is the fixture's, and it outlives the command. Left set, the
+			// next test's move would be swallowed too.
+			await witness?.tab.evaluate(() => Reflect.set(window, "swallowOnce", false));
 		});
 
 		await t.test("reading a work closes the chat panel, but not over a draft", async () => {
@@ -161,6 +189,7 @@ test(
 
 		await t.test("the feed moves off a live slide, which has no work identity", async () => {
 			await openWork("12345");
+			await app.execute("feed.open", {}, signal);
 			await app.execute("feed.next", {}, signal);
 			// The next press lands on the live slide, which carries no work id at
 			// all. The one after that is swallowed by the live player overlay, so
@@ -175,7 +204,26 @@ test(
 			const off = (await app.execute("feed.next", {}, signal)) as { page_kind: string; video: { id: string } };
 			assert.equal(off.page_kind, "video");
 			assert.equal(off.video.id, "67890");
-			await app.execute("feed.previous", {}, signal);
+		});
+		await t.test("a music post is a slide even though its video element has no size", async () => {
+			// A music post renders a 0x0 <video> holding an mp3. The slide itself is
+			// the usual `feed-active-video`, so a walk driven by laid-out videos saw no
+			// slide at all and `feed next` reported the feed as stuck while a work was
+			// plainly on screen.
+			await openWork("12345");
+			await witness?.tab.evaluate(() => {
+				const player = document.querySelector('[data-e2e="player-container"]');
+				const video = player?.querySelector("video");
+				if (!(video instanceof HTMLVideoElement)) return;
+				// The shape the live page has: a slide with a player that has no size.
+				video.style.cssText = "width:0;height:0;display:block";
+			});
+			try {
+				const state = (await app.execute("video.info", {}, signal)) as { video: { id: string } | null };
+				assert.equal(state.video?.id, "12345");
+			} finally {
+				await openWork("12345");
+			}
 		});
 
 		await t.test("two connections to one workspace share the tab and attribute operation facts", async () => {
@@ -196,6 +244,9 @@ test(
 		});
 
 		await t.test("reads and screenshots return actual fixture evidence", async () => {
+			// Point at the fixture's first work instead of inheriting whatever the
+			// previous test left on screen.
+			await openWork("12345");
 			const comments = (await app.execute("comment.list", {}, signal)) as {
 				items: {
 					id: string;

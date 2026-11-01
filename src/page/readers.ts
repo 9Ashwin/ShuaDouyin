@@ -241,10 +241,12 @@ export function readPageState(includeText = false) {
 		/(?:^|\/)user\/([A-Za-z0-9_-]{8,})/.exec(
 			liveSlides[0]?.querySelector("a[href]")?.getAttribute("href") ?? "",
 		)?.[1] ?? null;
-	const active = noteHeading
-		? undefined
-		: (works.find((element) => element.closest('[data-e2e="feed-active-video"]')) ??
-			(works.length === 1 ? works[0] : undefined));
+	// The work is identified through its slide, and a music post is why that is
+	// not the same as "the <video> with a size": its <video> is 0x0 and carries an
+	// mp3, so a search among sized videos found nothing while `feed-active-video`
+	// held the work the whole time. `inactiveSlide` is that last case only.
+	const marked = works.find((element) => element.closest('[data-e2e="feed-active-video"]'));
+	const active = noteHeading ? undefined : (marked ?? (works.length === 1 ? works[0] : undefined) ?? inactiveSlide());
 	if (active) {
 		const element = active;
 		const rect = element.getBoundingClientRect();
@@ -363,6 +365,24 @@ function searchResults() {
 		const card = element.closest('.search-result-card,[data-e2e="search-card"]') ?? element;
 		return [{ id, url: `https://www.douyin.com/video/${id}`, title: clean(card.textContent) }];
 	});
+}
+
+// The work on a slide whose <video> has no size: a music post plays an mp3
+// through a 0x0 element, so every search among laid-out videos misses it while
+// `feed-active-video` is showing the work. Only that shape counts here — a slide
+// with a real video never reaches this, and a page with no slide at all returns
+// undefined rather than guessing at some other element.
+function inactiveSlide(): HTMLVideoElement | undefined {
+	const root = document.querySelector<HTMLElement>('[data-e2e="feed-active-video"]');
+	if (!root) return undefined;
+	const video = root.querySelector<HTMLVideoElement>("video");
+	if (!video) return undefined;
+	const box = video.getBoundingClientRect();
+	// A slide that is genuinely between two works has laid-out neighbours; the
+	// music post is a slide whose only player is the unsized one.
+	if (box.width > 0 && box.height > 0) return undefined;
+	const rootBox = root.getBoundingClientRect();
+	return rootBox.width > 0 && rootBox.height > 0 ? video : undefined;
 }
 
 export function guardPage() {

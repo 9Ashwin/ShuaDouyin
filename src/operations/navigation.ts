@@ -227,16 +227,47 @@ export async function sweepFeed(
 	return { works, skipped, steps, stopped, error, step_ms };
 }
 
+// Moving to the neighbouring work.
+//
+// This used to press the feed's next-arrow, and that press is what made browsing
+// unreliable. The arrow is a per-build player control with its own idea of when
+// it is active: after a video reaches its end, after a comment panel has been
+// opened once, and in the overlay form, a real mouse press on it fires every
+// event and the player does nothing. It also does not exist at all on a
+// `/video/<id>` page — it is laid out 2800px below the viewport, outside the
+// window — which is where "Expected one feed navigation control, found 0" came
+// from, and why a round that landed on a detail page never recovered.
+//
+// A wheel over the player is the gesture a person makes on this page, and it
+// does not depend on a control being mounted, positioned or live: the feed's own
+// scroll container consumes it. Measured on the recommend feed it moved the feed
+// 12 times out of 12 with one retry, where the arrow press was intermittent and
+// fell to zero once a comment panel had been opened.
+//
+// The arrow stays as a fallback, and only where it can be seen, so a page whose
+// scroller refuses the wheel still has a way forward.
 export async function moveFeed(
 	session: Session,
 	name: "feed.next" | "feed.previous",
 	signal: AbortSignal,
-	// How long one attempt waits, and how many presses are granted in total. A
+	// How long one attempt waits, and how many moves are granted in total. A
 	// single caller reads a slow page once, so the defaults favour patience; a
-	// sweep presses repeatedly and would rather retry than wait.
+	// sweep moves repeatedly and would rather retry than wait.
 	tuning: { settle?: number; attempts?: number } = {},
 ): Promise<Snapshot> {
-	const before = await session.status();
+	// Moving the feed is only meaningful on the feed. Anywhere else — a work's
+	// `/video/<id>` page, a profile, a search page — there is no slide to move to,
+	// and attempting it produced the loop this command is known for: each call
+	// waited the full window, said the page did not reach the expected state, and
+	// left the next call on the same page to do it again.
+	//
+	// So the page is brought back to the feed first, once, and the result says it
+	// happened. Leaving it as an error would be honest but useless: the caller
+	// asked to advance the feed, and one recovery gets it there.
+	const landing = await session.status();
+	const recoveredFrom = isRecommendFeed(landing) ? null : (landing.url ?? null);
+	if (recoveredFrom) await openRecommendFeed(session, signal);
+	const before = recoveredFrom ? await session.status() : landing;
 	const slideKey = (state: Snapshot) =>
 		state.slide.kind === "page" ? null : `${state.slide.kind}:${state.slide.id ?? ""}`;
 	const was = slideKey(before);
@@ -244,29 +275,49 @@ export async function moveFeed(
 		const now = slideKey(state);
 		return !!now && !!state.slide.id && now !== was;
 	};
-	const settle = tuning.settle ?? 8000;
-	const attempts = tuning.attempts ?? 2;
-	// A live slide swallows the first press and then obeys. That is specific to
-	// live and is why the extra press is granted there. For any other slide a
-	// second press is only allowed when the page is provably still on the work it
-	// started from: pressing again after a move that merely took longer than the
+	// Most moves land in well under a second; a gesture that has not moved the
+	// feed in one and a half is one the page dropped. Waiting eight seconds
+	// before retrying turned a dropped gesture into a command that cost eight,
+	// and a caller who retried cost sixteen. Measured on the live feed the gesture
+	// lands at about 650ms and is dropped about one time in fifteen, so a short
+	// window with four attempts is both faster in the common case and more
+	// reliable in the uncommon one. Each attempt uses a different gesture.
+	const settle = tuning.settle ?? 1500;
+	const attempts = tuning.attempts ?? 4;
+	// A live slide swallows the first gesture and then obeys. That is specific to
+	// live and is why the extra move is granted there. For any other slide a
+	// second move is only allowed when the page is provably still on the work it
+	// started from: moving again after a change that merely took longer than the
 	// window would skip a work the caller never asked to pass.
+	const recovered = (state: Snapshot): Snapshot =>
+		recoveredFrom ? { ...state, recovered_from: recoveredFrom } : state;
 	for (let attempt = 0; attempt < attempts; attempt++) {
-		await control(session, name, { video_id: before.video?.id });
+		await wheelFeed(session, name, attempt);
 		const live = before.slide.kind === "live";
 		try {
-			return await waitSnapshot(session, moved, signal, live && attempt === 0 ? 2500 : settle);
+			return recovered(await waitSnapshot(session, moved, signal, live && attempt === 0 ? 2500 : settle));
 		} catch (error) {
 			if (!(error instanceof CliError) || error.code !== "selector_changed") throw error;
 			// A short window can expire just before the slide lands. Before treating
-			// that as a missed press — and pressing again, which would skip a work —
+			// that as a missed gesture — and moving again, which would skip a work —
 			// read where the page actually is. It moved; report it.
 			const now = await session.status().catch(() => null);
-			if (now && moved(now)) return now;
+			if (now && moved(now)) return recovered(now);
 			if (attempt === attempts - 1) throw error;
-			// Unmoved is the precondition for pressing again, and it has to be read
+			// Between slides the feed lays out the outgoing and incoming work at once
+			// and the active marker is briefly absent, so the page reports no slide at
+			// all. That is the move this loop is waiting for, not a different page —
+			// and it is why pressing again here is wrong: a second gesture mid-slide
+			// skips a work the caller never asked to pass. The time goes to watching.
+			const between = !now || slideKey(now) === null;
+			if (between) {
+				const landed = await waitSnapshot(session, moved, signal, settle * 4).catch(() => null);
+				if (landed) return recovered(landed);
+				continue;
+			}
+			// Unmoved is the precondition for moving again, and it has to be read
 			// from the page rather than assumed from the timeout.
-			if (!now || slideKey(now) !== was) throw error;
+			if (slideKey(now) !== was) throw error;
 			await delay(250, undefined, { signal });
 		}
 	}
@@ -274,6 +325,7 @@ export async function moveFeed(
 	// retry, skip or stop needs to know if it is stuck on a live slide, a detail
 	// page or the same work; "selector_changed" alone answers none of that.
 	const now = await session.status().catch(() => null);
+	const stuckOnDetail = !before.url?.includes("recommend=1");
 	throw new CliError("selector_changed", "The feed did not move to another slide", {
 		details: {
 			from: { kind: before.slide.kind, id: before.slide.id, page_kind: before.page_kind },
@@ -285,20 +337,54 @@ export async function moveFeed(
 						video_id: now.video?.id ?? null,
 					}
 				: null,
-			// The advice differs by state: a live slide swallows the first press,
-			// a detail page has no feed arrows at all.
-			hint:
-				before.slide.kind === "live"
-					? "A live slide can swallow a press; try once more."
-					: before.page_kind !== "video"
-						? "This page is not the feed; open the feed first."
-						: "The feed did not respond; check that the tab is not covered by a panel.",
 		},
 		hint:
 			before.slide.kind === "live"
-				? "A live slide can swallow a press; try once more."
-				: "Check the page state before retrying.",
+				? "A live slide can swallow a move; try once more."
+				: stuckOnDetail
+					? "This page is a work page, not the recommended feed. Run dy feed open to come back."
+					: "The feed did not respond; check that the tab is not covered by a panel.",
 	});
+}
+
+// Whether the page currently holding the tab is the recommended feed. The route
+// is the test, not the presence of a slide: a work's own page renders a slide
+// too, and treating that as the feed is what let a stuck round keep pressing.
+function isRecommendFeed(state: Snapshot): boolean {
+	return !!state.url?.includes("recommend=1") && !state.url.includes("modal_id=");
+}
+
+// One wheel gesture over the centre of the player.
+//
+// The pointer goes to the player first: a wheel delivered while the pointer is
+// over the page chrome scrolls nothing, because the feed's scroller only takes
+// events that originate inside it. `deltaY` is one screen at a time, which is
+// what the feed expects — a small delta scrolls within the current work instead
+// of moving to the next one.
+async function wheelFeed(session: Session, name: "feed.next" | "feed.previous", attempt: number): Promise<void> {
+	const step = name === "feed.next" ? 1 : -1;
+	// The second attempt is a different gesture on purpose. A wheel and an arrow
+	// key both move the feed, and measured on the live site they fail
+	// independently: ~1 in 12 gestures is dropped, and a drop is not a page
+	// problem. Repeating the same gesture after a drop is the worst case, because
+	// whatever swallowed the first one is still in place.
+	if (attempt > 0) {
+		await session.tab.keyboard.press(step > 0 ? "ArrowDown" : "ArrowUp");
+		return;
+	}
+	const aim = await session
+		.call<{ x: number; y: number; distance: number } | null>("feed.viewport", {})
+		.catch(() => null);
+	if (aim) {
+		await session.tab.mouse.move(aim.x, aim.y);
+		await session.tab.mouse.wheel(0, step * aim.distance);
+		return;
+	}
+	// No measured player. The arrow is the only remaining gesture, and it is only
+	// pressed when the page says exactly one visible arrow exists; a page where
+	// the arrow is off screen (a detail page) has no button to press and fails
+	// here rather than after an eight-second wait.
+	await control(session, name, {});
 }
 
 async function enterRecommendTab(session: Session): Promise<void> {

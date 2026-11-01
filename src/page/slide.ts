@@ -62,24 +62,34 @@ function coverage(element: Element): number {
 	return shown / (box.width * box.height);
 }
 
-function containerOf(video: Element): HTMLElement | null {
-	return (
-		video.closest<HTMLElement>('[data-e2e="feed-active-video"],[data-e2e="video-detail"]') ??
-		video.closest<HTMLElement>('[data-e2e="player-container"]')
-	);
-}
-
 // Every slide the page has laid out, current or not.
 export function slides(): CurrentSlide[] {
 	const privateArea = '[data-e2e="im-dialog"]';
 	const out: CurrentSlide[] = [];
 	const seen = new Set<HTMLElement>();
-	for (const video of findRendered<HTMLVideoElement>(document, "video")) {
-		if (video.closest(privateArea)) continue;
-		const root = containerOf(video);
-		if (!root || seen.has(root)) continue;
+	// The container is the identity, not the <video> inside it.
+	//
+	// A music post is the case that made this visible: its <video> is 0x0 and
+	// carries an mp3, so a walk driven by laid-out videos saw no slide at all.
+	// The feed had a work on screen the whole time — `feed-active-video`, the same
+	// element a video post uses — and `feed next` reported the page as stuck
+	// because nothing here named it.
+	const containers = findRendered<HTMLElement>(
+		document,
+		'[data-e2e="feed-active-video"],[data-e2e="video-detail"],[data-e2e="player-container"]',
+	);
+	for (const root of containers) {
+		if (root.closest(privateArea)) continue;
+		// A player container nested inside an active slide is the same slide. Only
+		// the outermost container is measured, so one work is never counted twice.
+		if (containers.some((other) => other !== root && other.contains(root))) continue;
+		if (seen.has(root)) continue;
 		seen.add(root);
-		out.push({ root, player: video, live: !!root.closest('[data-e2e="feed-live"]') });
+		out.push({
+			root,
+			player: root.querySelector<HTMLVideoElement>("video"),
+			live: !!root.closest('[data-e2e="feed-live"]'),
+		});
 	}
 	// A live slide is not always a <video>, so its own container is added when no
 	// player inside it produced one.

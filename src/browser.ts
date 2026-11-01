@@ -58,6 +58,10 @@ export interface Snapshot {
 	slide: { kind: string; id: string | null };
 	// Set when opening the feed had to step past a live slide to reach a work.
 	skipped_live?: string;
+	// Set when moving the feed first had to come back from another page. The
+	// feed moved, but the work arrived at is the one after wherever the feed
+	// resumed — not the one after the page the caller was looking at.
+	recovered_from?: string;
 	search_results: { id: string; url: string; title: string }[];
 	visible_text?: string;
 }

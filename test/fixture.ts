@@ -175,16 +175,41 @@ const note=/^\\/note\\/(\\d+)/.exec(location.pathname);
 if(note){q('#player').style.display='none';q('#note').style.display='block';q('#note').dataset.noteId=note[1];}
 for(const [selector,delta] of [['note-previous',-1],['note-next',1]])q('[data-e2e="'+selector+'"]').onclick=()=>{const el=q('#note-index');const index=Math.max(1,Math.min(2,Number(el.textContent)+delta));el.textContent=String(index);qa('#note .bullet').forEach((bullet,i)=>bullet.classList.toggle('active',i===index-1));};
 function setLive(host){q('#player').style.display=host?'none':'block';q('#live').style.display=host?'block':'none';if(host)q('#live-link').setAttribute('href','/user/'+host);q('[data-e2e="video-switch-next-arrow"]').dataset.live=host?'1':'';}
+// Moving the feed does not change the URL. setVideo rewrites the path to
+// /video/<id>, which is what a work page does, not what the feed does — and the
+// difference is load-bearing now: a feed that reported /video/<id> after every
+// step looked like a page that had left the feed.
+function onFeed(){return location.pathname==='/'||location.search.includes('recommend=1');}
 q('[data-e2e="video-switch-next-arrow"]').onclick=()=>{
 // A live slide swallows the first press, exactly as the real player does: the
 // overlay claims the click and the feed only advances on the next one.
-if(q('[data-e2e="video-switch-next-arrow"]').dataset.live){window.livePressIgnored=(window.livePressIgnored||0)+1;if(window.livePressIgnored===1)return;setLive(null);window.livePressIgnored=0;setVideo('67890');return;}
+if(q('[data-e2e="video-switch-next-arrow"]').dataset.live){window.livePressIgnored=(window.livePressIgnored||0)+1;if(window.livePressIgnored===1)return;setLive(null);window.livePressIgnored=0;setVideo('67890',onFeed());return;}
 // A normal slide can also swallow one press: the click lands while the player is
 // still settling and nothing moves. That is the case the retry exists for, and
 // it must only fire when the page is provably still on the work it started from.
 if(window.swallowOnce){window.swallowOnce=false;window.swallowed=(window.swallowed||0)+1;return;}
-if(q('#player').getAttribute('data-video-id')==='67890'){setLive('live_host_two');return;}setLive(null);setVideo('67890');};
-q('[data-e2e="video-switch-prev-arrow"]').onclick=()=>{setLive(null);setVideo('12345');};
+if(q('#player').getAttribute('data-video-id')==='67890'){setLive('live_host_two');return;}setLive(null);setVideo('67890',onFeed());};
+q('[data-e2e="video-switch-prev-arrow"]').onclick=()=>{setLive(null);setVideo('12345',onFeed());};
+// The feed advances on a wheel too, which is the gesture dy uses now. It is the
+// same move the arrows make, including the states the arrows have: a live slide
+// swallows the first gesture, and really points no longer exist on a work page.
+// A wheel over the player is what a person does, so the fixture answers it.
+document.addEventListener('wheel',(e)=>{
+if(e.target.closest&&e.target.closest('[data-e2e="im-dialog"],#im'))return;
+if(e.target.closest&&e.target.closest('[data-e2e="video-detail"]'))return;
+window.wheelMoves=(window.wheelMoves||0)+1;
+if(e.deltaY>0)q('[data-e2e="video-switch-next-arrow"]').onclick();else q('[data-e2e="video-switch-prev-arrow"]').onclick();
+},{passive:true});
+// Arrow keys move the feed on the live site too, and dy uses one for its second
+// attempt — a different gesture from the wheel, because a drop is the gesture
+// being ignored rather than the page being stuck.
+document.addEventListener('keydown',(e)=>{
+if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+const tag=document.activeElement&&document.activeElement.tagName;
+if(tag==='INPUT'||tag==='TEXTAREA')return;
+window.keyMoves=(window.keyMoves||0)+1;
+if(e.key==='ArrowDown')q('[data-e2e="video-switch-next-arrow"]').onclick();else q('[data-e2e="video-switch-prev-arrow"]').onclick();
+},{passive:true});
 for(const s of ['video-player-digg','video-player-collect','note-digg','note-collect'])q('[data-e2e="'+s+'"]').onclick=e=>{const b=e.currentTarget;
 // Mirror the live page: toggle the marker between no-<action> and is-<action>,
 // and keep aria-pressed in step for the note controls that still use it.
